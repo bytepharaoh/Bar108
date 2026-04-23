@@ -1,7 +1,4 @@
 version: "2"
-run:
-  cache-dir: .golangci-cache   # keeps cache local and gitignored
-
 linters:
   enable:
     - govet # catches suspicious code (e.g. wrong printf args)

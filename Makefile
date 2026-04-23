@@ -54,7 +54,16 @@ db-down:
 ## db-logs: show database logs
 db-logs:
 	docker-compose logs -f db
+## migrate: run SQL migrations
+migrate:
+	docker exec -i bar108_db psql -U $(DB_USER) -d $(DB_NAME) < db/migrations/001_init.sql
 
+## db-shell: open interactive postgres shell
+db-shell:
+	docker exec -it bar108_db psql -U $(DB_USER) -d $(DB_NAME)
+	## sqlc: generate Go code from SQL queries
+sqlc:
+	sqlc generate
 # ——— Help ——————————————————————————————————
 
 ## help: print all available commands
@@ -62,4 +71,4 @@ help:
 	@echo "Available commands:"
 	@sed -n 's/^##//p' $(MAKEFILE_LIST) | column -t -s ':' | sed -e 's/^/ /'
 
-.PHONY: run build clean fmt lint vet check db-up db-down db-logs help
+.PHONY: run build clean fmt lint vet check db-up db-down db-logs help migrate db-shell sqlc

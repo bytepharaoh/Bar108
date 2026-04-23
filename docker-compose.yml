@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine        # alpine = smaller image size
+    container_name: bar108_db
+    restart: unless-stopped          # auto-restart if it crashes
+    environment:
+      POSTGRES_USER: ${DB_USER}      # reads from your .env file
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "${DB_PORT}:5432"            # maps your machine's port to container's port
+    volumes:
+      - bar108_pgdata:/var/lib/postgresql/data   # persists data between restarts
+
+volumes:
+  bar108_pgdata:                     # named volume — Docker manages this
