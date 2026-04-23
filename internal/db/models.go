@@ -98,4 +98,5 @@ type User struct {
 	PasswordHash string    `json:"password_hash"`
 	BonusPoints  int32     `json:"bonus_points"`
 	CreatedAt    time.Time `json:"created_at"`
+	IsActive     bool      `json:"is_active"`
 }

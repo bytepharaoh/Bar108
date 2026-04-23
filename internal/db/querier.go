@@ -9,12 +9,23 @@ import (
 )
 
 type Querier interface {
+	ActivateUser(ctx context.Context, id int32) (User, error)
 	CreateMenuItem(ctx context.Context, arg CreateMenuItemParams) (MenuItem, error)
+	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	DeactivateUser(ctx context.Context, id int32) (User, error)
 	DeleteMenuItem(ctx context.Context, id int32) error
+	GetActiveUsers(ctx context.Context) ([]User, error)
 	GetAllCategories(ctx context.Context) ([]Category, error)
 	GetAllMenuItems(ctx context.Context) ([]GetAllMenuItemsRow, error)
+	GetAllUsers(ctx context.Context) ([]User, error)
 	GetMenuItemByID(ctx context.Context, id int32) (GetMenuItemByIDRow, error)
+	GetUserByEmail(ctx context.Context, email string) (User, error)
+	GetUserByID(ctx context.Context, id int32) (User, error)
+	GetUserByPhone(ctx context.Context, phone string) (User, error)
+	HasActiveOrdersByUserID(ctx context.Context, userID int32) (bool, error)
 	UpdateMenuItem(ctx context.Context, arg UpdateMenuItemParams) (MenuItem, error)
+	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
+	UpdateUserBonusPoints(ctx context.Context, arg UpdateUserBonusPointsParams) (User, error)
 }
 
 var _ Querier = (*Queries)(nil)

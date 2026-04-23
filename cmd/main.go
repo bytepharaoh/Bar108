@@ -3,11 +3,11 @@ package main
 import (
 	"bar108/config"
 	"database/sql"
-	"log"
-	"net/http"
-	 _ "github.com/lib/pq"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
+	"log"
+	"net/http"
 )
 
 func main() {

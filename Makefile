@@ -9,7 +9,6 @@ export
 APP_NAME=bar108
 CMD_PATH=./cmd/main.go
 BIN_PATH=./bin/$(APP_NAME)
-
 # ——— Development ———————————————————————————
 
 ## run: start the server (with live .env loaded)
@@ -57,7 +56,12 @@ db-logs:
 ## migrate: run SQL migrations
 migrate:
 	docker exec -i bar108_db psql -U $(DB_USER) -d $(DB_NAME) < db/migrations/001_init.sql
-
+migrate-up:
+	migrate -path db/migrations -database "$(DB_URL)" up
+migrate-down:
+	migrate -path db/migrations -database "$(DB_URL)" down
+new-migrate:
+	migrate create -ext sql -dir db/migrations -seq add_orders_index
 ## db-shell: open interactive postgres shell
 db-shell:
 	docker exec -it bar108_db psql -U $(DB_USER) -d $(DB_NAME)
@@ -71,4 +75,4 @@ help:
 	@echo "Available commands:"
 	@sed -n 's/^##//p' $(MAKEFILE_LIST) | column -t -s ':' | sed -e 's/^/ /'
 
-.PHONY: run build clean fmt lint vet check db-up db-down db-logs help migrate db-shell sqlc
+.PHONY: run build clean fmt lint vet check db-up db-down db-logs help migrate db-shell sqlc migrate-up migrate-down
