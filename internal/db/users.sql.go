@@ -247,14 +247,14 @@ SELECT EXISTS (
     FROM orders
     WHERE user_id = $1
       AND status IN ('pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery')
-)
+) AS has_active_orders
 `
 
 func (q *Queries) HasActiveOrdersByUserID(ctx context.Context, userID int32) (bool, error) {
 	row := q.db.QueryRowContext(ctx, hasActiveOrdersByUserID, userID)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
+	var has_active_orders bool
+	err := row.Scan(&has_active_orders)
+	return has_active_orders, err
 }
 
 const updateUser = `-- name: UpdateUser :one

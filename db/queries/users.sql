@@ -61,7 +61,7 @@ SELECT EXISTS (
     FROM orders
     WHERE user_id = $1
       AND status IN ('pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery')
-);
+) AS has_active_orders;
 
 -- name: DeactivateUser :one
 UPDATE users
