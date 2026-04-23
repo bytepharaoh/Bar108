@@ -1,0 +1,21 @@
+version: "2"
+run:
+  cache-dir: .golangci-cache   # keeps cache local and gitignored
+
+linters:
+  enable:
+    - govet # catches suspicious code (e.g. wrong printf args)
+    - errcheck # make sure you're handling errors (very important in Go)
+    - staticcheck # advanced bug detection
+    - unused # flags unused variables and functions
+
+formatters:
+  enable:
+    - gofmt # enforce standard formatting
+  settings:
+    gofmt:
+      simplify: true
+
+issues:
+  max-issues-per-linter: 50
+  max-same-issues: 10
