@@ -16,7 +16,7 @@ func (m *MockMenuRepository) GetAllMenuItems(ctx context.Context) ([]db.GetAllMe
 	return args.Get(0).([]db.GetAllMenuItemsRow), args.Error(1)
 
 }
-func (m *MockMenuRepository) GetMenuItemsByID(ctx context.Context, id int32) (db.GetMenuItemByIDRow, error) {
+func (m *MockMenuRepository) GetMenuItemByID(ctx context.Context, id int32) (db.GetMenuItemByIDRow, error) {
 	args := m.Called(ctx, id)
 	return args.Get(0).(db.GetMenuItemByIDRow), args.Error(1)
 }
