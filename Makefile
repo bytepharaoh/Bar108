@@ -22,6 +22,13 @@ build:
 ## clean: remove compiled binaries
 clean:
 	rm -rf ./bin
+## test: run all tests with race detector
+test:
+	go test -v -race ./...
+## test-coverage: run tests and show coverage percentage
+test-coverage:
+	go test -v -race -coverprofile=coverage.out ./...
+	go tool cover -html=coverage.out
 
 # ——— Code quality ——————————————————————————
 
@@ -75,4 +82,4 @@ help:
 	@echo "Available commands:"
 	@sed -n 's/^##//p' $(MAKEFILE_LIST) | column -t -s ':' | sed -e 's/^/ /'
 
-.PHONY: run build clean fmt lint vet check db-up db-down db-logs help migrate db-shell sqlc migrate-up migrate-down
+.PHONY: run build clean fmt lint vet check db-up db-down db-logs help migrate db-shell sqlc migrate-up migrate-down test test-coverage
