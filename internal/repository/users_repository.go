@@ -4,6 +4,7 @@ import (
 	"bar108/internal/db"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 )
 
@@ -47,7 +48,7 @@ func (r *usersRepository) GetAllUsers(ctx context.Context) ([]db.User, error) {
 func (r *usersRepository) GetUserByID(ctx context.Context, id int32) (db.User, error) {
 	user, err := r.queries.GetUserByID(ctx, id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return db.User{}, fmt.Errorf("user with id %d not found: %w", id, sql.ErrNoRows)
 		}
 		return db.User{}, fmt.Errorf("GetUserByID: %w", err)
@@ -58,7 +59,7 @@ func (r *usersRepository) GetUserByID(ctx context.Context, id int32) (db.User, e
 func (r *usersRepository) GetUserByEmail(ctx context.Context, email string) (db.User, error) {
 	user, err := r.queries.GetUserByEmail(ctx, email)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return db.User{}, fmt.Errorf("user with email %s not found: %w", email, sql.ErrNoRows)
 		}
 		return db.User{}, fmt.Errorf("GetUserByEmail: %w", err)
@@ -69,7 +70,7 @@ func (r *usersRepository) GetUserByEmail(ctx context.Context, email string) (db.
 func (r *usersRepository) GetUserByPhone(ctx context.Context, phone string) (db.User, error) {
 	user, err := r.queries.GetUserByPhone(ctx, phone)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return db.User{}, fmt.Errorf("user with phone %s not found: %w", phone, sql.ErrNoRows)
 		}
 		return db.User{}, fmt.Errorf("GetUserByPhone: %w", err)
@@ -80,7 +81,7 @@ func (r *usersRepository) GetUserByPhone(ctx context.Context, phone string) (db.
 func (r *usersRepository) UpdateUser(ctx context.Context, arg db.UpdateUserParams) (db.User, error) {
 	user, err := r.queries.UpdateUser(ctx, arg)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return db.User{}, fmt.Errorf("user with id %d not found: %w", arg.ID, sql.ErrNoRows)
 
 		}
@@ -92,7 +93,7 @@ func (r *usersRepository) UpdateUser(ctx context.Context, arg db.UpdateUserParam
 func (r *usersRepository) ActivateUser(ctx context.Context, id int32) (db.User, error) {
 	user, err := r.queries.ActivateUser(ctx, id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return db.User{}, fmt.Errorf("user with id %d not found: %w", id, sql.ErrNoRows)
 
 		}
@@ -110,7 +111,7 @@ func (r *usersRepository) GetActiveUsers(ctx context.Context) ([]db.User, error)
 func (r *usersRepository) DeactivateUser(ctx context.Context, id int32) (db.User, error) {
 	user, err := r.queries.DeactivateUser(ctx, id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return db.User{}, fmt.Errorf("user with id %d not found: %w", id, sql.ErrNoRows)
 
 		}

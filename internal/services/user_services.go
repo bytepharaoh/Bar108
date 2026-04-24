@@ -58,10 +58,13 @@ func validateRequiredUserFields(name, phone, email, passHash string) error {
 	if strings.TrimSpace(phone) == "" {
 		return ErrEmptyUserPhone
 	}
+
 	if strings.TrimSpace(email) == "" {
 		return ErrEmptyUserEmail
 	}
-	if !strings.Contains(email, "@") {
+
+	parts := strings.Split(email, "@")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" || !strings.Contains(parts[1], ".") {
 		return ErrInvalidUserEmail
 	}
 
@@ -88,13 +91,14 @@ func (s *userService) CreateUser(ctx context.Context, arg db.CreateUserParams) (
 	if err := validateRequiredUserFields(arg.Name, arg.Phone, arg.Email, arg.PasswordHash); err != nil {
 		return db.User{}, err
 	}
-	if arg.BonusPoints < 0 {
-		return db.User{}, ErrNegativeBonusPoints
-	}
+	// Business rule: new users always start with 0 bonus points
+
+	arg.BonusPoints = 0
 	user, err := s.repo.CreateUser(ctx, arg)
 	if err != nil {
 		return db.User{}, fmt.Errorf("CreateUser service: %w", err)
 	}
+
 	return user, nil
 
 }

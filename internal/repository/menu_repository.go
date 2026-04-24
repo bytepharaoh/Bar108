@@ -4,6 +4,7 @@ import (
 	db "bar108/internal/db"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 )
 
@@ -38,7 +39,7 @@ func (r *menuRepository) GetAllMenuItems(ctx context.Context) ([]db.GetAllMenuIt
 func (r *menuRepository) GetMenuItemByID(ctx context.Context, id int32) (db.GetMenuItemByIDRow, error) {
 	item, err := r.queries.GetMenuItemByID(ctx, id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return db.GetMenuItemByIDRow{}, fmt.Errorf("menu item %d not found: %w", id, sql.ErrNoRows)
 		}
 		return db.GetMenuItemByIDRow{}, fmt.Errorf("GetMenuItemByID: %w", err)
@@ -62,7 +63,7 @@ func (r *menuRepository) CreateMenuItem(ctx context.Context, arg db.CreateMenuIt
 func (r *menuRepository) UpdateMenuItem(ctx context.Context, arg db.UpdateMenuItemParams) (db.MenuItem, error) {
 	item, err := r.queries.UpdateMenuItem(ctx, arg)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return db.MenuItem{}, fmt.Errorf("menu item %d not found: %w", arg.ID, sql.ErrNoRows)
 
 		}
