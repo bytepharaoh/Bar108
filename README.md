@@ -58,7 +58,7 @@
 
 ## Database Schema
 
-![Database](docs/schema.svg)
+![Database](Bar108.png)
 
 **9 Tables:** `users` · `categories` · `menu_items` · `promotions` · `couriers` · `orders` · `order_items` · `order_status_history` · `bonus_transactions`
 
