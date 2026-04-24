@@ -1,14 +1,6 @@
 <div align="center">
 
-<svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="120" height="120" rx="24" fill="#0D0D0D"/>
-  <rect x="20" y="35" width="80" height="8" rx="4" fill="#FF4D00"/>
-  <rect x="20" y="52" width="55" height="8" rx="4" fill="#FF4D00" opacity="0.6"/>
-  <rect x="20" y="69" width="70" height="8" rx="4" fill="#FF4D00" opacity="0.3"/>
-  <circle cx="88" cy="85" r="16" fill="#FF4D00"/>
-  <text x="88" y="90" text-anchor="middle" font-family="monospace" font-size="14" font-weight="bold" fill="#0D0D0D">108</text>
-</svg>
-
+![Bar108](docs/logo.svg)
 # BAR 108
 
 ### `Production-Grade Restaurant Ordering Backend`
@@ -40,33 +32,7 @@
 
 ## Architecture
 
-<div align="center">
-
-```
-┌─────────────────────────────────────────────────────┐
-│                    CLIENT                           │
-│              (Web / Mobile App)                     │
-└────────────────────┬────────────────────────────────┘
-                     │ HTTP / JSON
-┌────────────────────▼────────────────────────────────┐
-│                  GIN ROUTER                         │
-│         Middleware · Auth · Rate Limit              │
-├──────────────┬──────────────┬───────────────────────┤
-│   /menu      │   /orders    │   /users              │
-│   Handlers   │   Handlers   │   Handlers            │
-├──────────────┴──────────────┴───────────────────────┤
-│                SERVICE LAYER                        │
-│         Business Logic · Validation · Rules         │
-├─────────────────────────────────────────────────────┤
-│               REPOSITORY LAYER                      │
-│            SQLC Generated Queries                   │
-├─────────────────────────────────────────────────────┤
-│              PostgreSQL 16                          │
-│         9 Tables · Constraints · Indexes            │
-└─────────────────────────────────────────────────────┘
-```
-
-</div>
+![Architecture](docs/architecture.svg)
 
 ---
 
@@ -92,21 +58,7 @@
 
 ## Database Schema
 
-<div align="center">
-
-```
-users ──────────────── orders ──────────── order_items
-  │                      │    │                 │
-  │                      │    └── couriers      │
-  │                      │                      │
-  └── bonus_transactions  │              menu_items
-                          │                  │
-                   order_status_history   categories
-                          │
-                     promotions
-```
-
-</div>
+![Database](docs/schema.svg)
 
 **9 Tables:** `users` · `categories` · `menu_items` · `promotions` · `couriers` · `orders` · `order_items` · `order_status_history` · `bonus_transactions`
 
