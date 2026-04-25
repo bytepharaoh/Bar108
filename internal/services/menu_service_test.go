@@ -56,7 +56,7 @@ func TestGetMenuItems_DB_Error(t *testing.T) {
 	assert.ErrorContains(t, err, "GetAllMenuItems service")
 	mockRepo.AssertExpectations(t)
 }
-func TestGetMeniItemByID_HappyPath(t *testing.T) {
+func TestGetMenuItemByID_HappyPath(t *testing.T) {
 	svc, mockRepo := setupMenuService(t)
 	expected := db.GetMenuItemByIDRow{
 		ID: 1, Name: "Classic Burger",
@@ -67,7 +67,7 @@ func TestGetMeniItemByID_HappyPath(t *testing.T) {
 	assert.Equal(t, expected, result)
 	mockRepo.AssertExpectations(t)
 }
-func TestGetMeniItemByID_NotFound(t *testing.T) {
+func TestGetMenuItemByID_NotFound(t *testing.T) {
 	svc, mockRepo := setupMenuService(t)
 	mockRepo.On("GetMenuItemByID", context.Background(), int32(999)).Return(db.GetMenuItemByIDRow{}, sql.ErrNoRows)
 
