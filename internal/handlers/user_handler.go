@@ -42,6 +42,10 @@ func (h *UserHandler) GetAllUsers(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get users"})
 		return
 	}
+	if users == nil {
+		users = []db.User{}
+	}
+
 	c.JSON(http.StatusOK, gin.H{"data": users})
 }
 
@@ -51,6 +55,10 @@ func (h *UserHandler) GetActiveUsers(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get active users"})
 		return
 	}
+	if users == nil {
+		users = []db.User{}
+	}
+
 	c.JSON(http.StatusOK, gin.H{"data": users})
 }
 

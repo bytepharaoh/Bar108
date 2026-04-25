@@ -28,6 +28,70 @@ type updateMenuItemsRequest struct {
 	Available   bool   `json:"available"`
 }
 
+// menuItemResponse is what we send to the client.
+// We never expose raw db structs directly — this gives us
+// full control over the JSON shape.
+type menuItemResponse struct {
+	ID           int32   `json:"id"`
+	CategoryID   int32   `json:"category_id"`
+	CategoryName string  `json:"category_name,omitempty"`
+	Name         string  `json:"name"`
+	Description  *string `json:"description"` // pointer: null if empty, string if set
+	Price        string  `json:"price"`
+	Available    bool    `json:"available"`
+	CreatedAt    string  `json:"created_at"`
+}
+
+func toMenuItemResponse(item db.GetAllMenuItemsRow) menuItemResponse {
+	var desc *string
+	if item.Description.Valid {
+		desc = &item.Description.String
+	}
+	return menuItemResponse{
+		ID:           item.ID,
+		CategoryID:   item.CategoryID,
+		CategoryName: item.CategoryName,
+		Name:         item.Name,
+		Description:  desc,
+		Price:        item.Price,
+		Available:    item.Available,
+		CreatedAt:    item.CreatedAt.Format("2006-01-02T15:04:05Z"),
+	}
+}
+
+func toMenuItemByIDResponse(item db.GetMenuItemByIDRow) menuItemResponse {
+	var desc *string
+	if item.Description.Valid {
+		desc = &item.Description.String
+	}
+	return menuItemResponse{
+		ID:           item.ID,
+		CategoryID:   item.CategoryID,
+		CategoryName: item.CategoryName,
+		Name:         item.Name,
+		Description:  desc,
+		Price:        item.Price,
+		Available:    item.Available,
+		CreatedAt:    item.CreatedAt.Format("2006-01-02T15:04:05Z"),
+	}
+}
+
+func toMenuItemFromCreate(item db.MenuItem) menuItemResponse {
+	var desc *string
+	if item.Description.Valid {
+		desc = &item.Description.String
+	}
+	return menuItemResponse{
+		ID:          item.ID,
+		CategoryID:  item.CategoryID,
+		Name:        item.Name,
+		Description: desc,
+		Price:       item.Price,
+		Available:   item.Available,
+		CreatedAt:   item.CreatedAt.Format("2006-01-02T15:04:05Z"),
+	}
+}
+
 func NewMenuHandler(service services.MenuService) *MenuHandler {
 	return &MenuHandler{
 		service: service,
@@ -36,15 +100,16 @@ func NewMenuHandler(service services.MenuService) *MenuHandler {
 func (h *MenuHandler) GetAllMenuItems(c *gin.Context) {
 	items, err := h.service.GetAllMenuItems(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "failed to get menu items",
-		})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get menu items"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
-		"data": items,
-	})
+	resp := make([]menuItemResponse, len(items))
+	for i, item := range items {
+		resp[i] = toMenuItemResponse(item)
+	}
+	c.JSON(http.StatusOK, gin.H{"data": resp})
 }
+
 func (h *MenuHandler) GetMenuItemByID(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -63,7 +128,7 @@ func (h *MenuHandler) GetMenuItemByID(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get menu item"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": item})
+	c.JSON(http.StatusOK, gin.H{"data": toMenuItemByIDResponse(item)})
 }
 
 func (h *MenuHandler) GetAllCategories(c *gin.Context) {
@@ -112,9 +177,7 @@ func (h *MenuHandler) CreateMenuItem(c *gin.Context) {
 		})
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{
-		"data": item,
-	})
+	c.JSON(http.StatusCreated, gin.H{"data": toMenuItemFromCreate(item)})
 }
 func (h *MenuHandler) UpdateMenuItem(c *gin.Context) {
 	id, ok := parseID(c)
@@ -161,9 +224,7 @@ func (h *MenuHandler) UpdateMenuItem(c *gin.Context) {
 		})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
-		"data": item,
-	})
+	c.JSON(http.StatusOK, gin.H{"data": toMenuItemFromCreate(item)})
 }
 func (h *MenuHandler) DeleteMenuItem(c *gin.Context) {
 	id, ok := parseID(c)
