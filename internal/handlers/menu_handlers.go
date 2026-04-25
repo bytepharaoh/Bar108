@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
@@ -47,36 +46,24 @@ func (h *MenuHandler) GetAllMenuItems(c *gin.Context) {
 	})
 }
 func (h *MenuHandler) GetMenuItemByID(c *gin.Context) {
-	idParam := c.Param("id")
-	id64, err := strconv.ParseInt(idParam, 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "invalid menu item id",
-		})
+	id, ok := parseID(c)
+	if !ok {
 		return
 	}
-	item, err := h.service.GetMenuItemByID(c.Request.Context(), int32(id64))
+	item, err := h.service.GetMenuItemByID(c.Request.Context(), id)
 	if err != nil {
 		if errors.Is(err, services.ErrInvalidMenuItemID) {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "invalid menu item id",
-			})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid menu item id"})
 			return
 		}
 		if errors.Is(err, services.ErrMenuItemNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{
-				"error": "menu item not found",
-			})
+			c.JSON(http.StatusNotFound, gin.H{"error": "menu item not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "failed to get menu item id",
-		})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get menu item"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
-		"data": item,
-	})
+	c.JSON(http.StatusOK, gin.H{"data": item})
 }
 
 func (h *MenuHandler) GetAllCategories(c *gin.Context) {
@@ -130,12 +117,8 @@ func (h *MenuHandler) CreateMenuItem(c *gin.Context) {
 	})
 }
 func (h *MenuHandler) UpdateMenuItem(c *gin.Context) {
-	idParam := c.Param("id")
-	id64, err := strconv.ParseInt(idParam, 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "invalid menu item id",
-		})
+	id, ok := parseID(c)
+	if !ok {
 		return
 	}
 	var req updateMenuItemsRequest
@@ -146,7 +129,7 @@ func (h *MenuHandler) UpdateMenuItem(c *gin.Context) {
 		return
 	}
 	args := db.UpdateMenuItemParams{
-		ID:         int32(id64),
+		ID:         int32(id),
 		CategoryID: req.CategoryID,
 		Name:       req.Name,
 		Description: sql.NullString{
@@ -183,15 +166,11 @@ func (h *MenuHandler) UpdateMenuItem(c *gin.Context) {
 	})
 }
 func (h *MenuHandler) DeleteMenuItem(c *gin.Context) {
-	idParam := c.Param("id")
-	id64, err := strconv.ParseInt(idParam, 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "invalid menu item id",
-		})
+	id, ok := parseID(c)
+	if !ok {
 		return
 	}
-	err = h.service.DeleteMenuItem(c.Request.Context(), int32(id64))
+	err := h.service.DeleteMenuItem(c.Request.Context(), int32(id))
 	if err != nil {
 		if errors.Is(err, services.ErrInvalidMenuItemID) {
 			c.JSON(http.StatusBadRequest, gin.H{
