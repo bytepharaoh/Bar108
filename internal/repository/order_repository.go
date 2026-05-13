@@ -45,6 +45,7 @@ type PlaceOrderResult struct {
 // The service will define its own private orderStore
 // interface with only the methods it needs.
 // =============================================
+//go:generate mockgen -source=order_repository.go -destination=mocks/order_repository_mock.go -package=mocks
 
 type OrderRepository interface {
 	PlaceOrder(ctx context.Context, input PlaceOrderInput) (PlaceOrderResult, error)

@@ -75,6 +75,25 @@ db-shell:
 	## sqlc: generate Go code from SQL queries
 sqlc:
 	sqlc generate
+
+## generate: run all go:generate directives
+generate:
+	go generate ./...
+
+## mocks: generate all mocks using mockgen
+mocks:
+	mockgen -source=internal/services/menu_service.go \
+		-destination=internal/services/mocks/menu_service_mock.go \
+		-package=mocks
+	mockgen -source=internal/services/user_services.go \
+		-destination=internal/services/mocks/user_service_mock.go \
+		-package=mocks
+	mockgen -source=internal/repository/order_repository.go \
+		-destination=internal/repository/mocks/order_repository_mock.go \
+		-package=mocks
+	mockgen -source=internal/repository/menu_repository.go \
+		-destination=internal/repository/mocks/menu_repository_mock.go \
+		-package=mocks
 # ——— Help ——————————————————————————————————
 
 ## help: print all available commands
@@ -82,4 +101,4 @@ help:
 	@echo "Available commands:"
 	@sed -n 's/^##//p' $(MAKEFILE_LIST) | column -t -s ':' | sed -e 's/^/ /'
 
-.PHONY: run build clean fmt lint vet check db-up db-down db-logs help migrate db-shell sqlc migrate-up migrate-down test test-coverage
+.PHONY: run build clean fmt lint vet check db-up db-down db-logs help migrate db-shell sqlc migrate-up migrate-down test test-coverage generate mocks

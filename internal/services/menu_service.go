@@ -29,6 +29,8 @@ var (
 	ErrZeroPrice         = apperror.ErrZeroPrice
 )
 
+//go:generate mockgen -source=menu_service.go -destination=mocks/menu_service_mock.go -package=mocks
+
 type MenuService interface {
 	GetAllMenuItems(ctx context.Context) ([]db.GetAllMenuItemsRow, error)
 	GetMenuItemByID(ctx context.Context, id int32) (db.GetMenuItemByIDRow, error)

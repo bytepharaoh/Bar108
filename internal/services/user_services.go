@@ -10,6 +10,8 @@ import (
 	"strings"
 )
 
+//go:generate mockgen -source=user_service.go -destination=mocks/user_service_mock.go -package=mocks
+
 type userStore interface {
 	CreateUser(ctx context.Context, arg db.CreateUserParams) (db.User, error)
 	GetAllUsers(ctx context.Context) ([]db.User, error)
