@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strconv"
 	"time"
 )
 
@@ -170,8 +171,10 @@ func (r *orderRepository) PlaceOrder(ctx context.Context, input PlaceOrderInput)
 		}
 
 		// Calculate discount
-		var promoValue float64
-		fmt.Sscanf(promo.DiscountValue, "%f", &promoValue)
+		promoValue, err := strconv.ParseFloat(promo.DiscountValue, 64)
+		if err != nil {
+			return PlaceOrderResult{}, fmt.Errorf("PlaceOrder invalid promo value: %w", err)
+		}
 
 		if promo.DiscountType == "percentage" {
 			discountAmount = totalPrice * (promoValue / 100)
