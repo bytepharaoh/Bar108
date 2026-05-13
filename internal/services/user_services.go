@@ -1,6 +1,7 @@
 package services
 
 import (
+	"bar108/internal/apperror"
 	"bar108/internal/db"
 	"context"
 	"database/sql"
@@ -24,17 +25,17 @@ type userStore interface {
 }
 
 var (
-	ErrInvalidUserID       = errors.New("invalid user id")
-	ErrUserNotFound        = errors.New("user not found")
-	ErrEmptyUserName       = errors.New("username is required")
-	ErrEmptyUserPhone      = errors.New("phone is required")
-	ErrEmptyUserEmail      = errors.New("email is required")
-	ErrInvalidUserEmail    = errors.New("invalid user email")
-	ErrEmptyPasswordHash   = errors.New("password hash is required")
-	ErrNegativeBonusPoints = errors.New("bonus points cannot be negative")
-	ErrUserAlreadyInactive = errors.New("user is already inactive")
-	ErrUserAlreadyActive   = errors.New("user is already active")
-	ErrUserHasActiveOrders = errors.New("user has active orders")
+	ErrInvalidUserID       = apperror.ErrInvalidID
+	ErrUserNotFound        = apperror.ErrUserNotFound
+	ErrEmptyUserName       = apperror.ErrInvalidInput
+	ErrEmptyUserPhone      = apperror.ErrInvalidInput
+	ErrEmptyUserEmail      = apperror.ErrInvalidInput
+	ErrInvalidUserEmail    = apperror.ErrInvalidInput
+	ErrEmptyPasswordHash   = apperror.ErrInvalidInput
+	ErrNegativeBonusPoints = apperror.ErrInvalidInput
+	ErrUserAlreadyInactive = apperror.ErrAlreadyInactive
+	ErrUserAlreadyActive   = apperror.ErrAlreadyActive
+	ErrUserHasActiveOrders = apperror.ErrHasActiveOrders
 )
 
 type UserService interface {

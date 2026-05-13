@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bar108/internal/apperror"
 	"bar108/internal/db"
 	"bar108/internal/services"
 	"database/sql"
@@ -100,7 +101,7 @@ func NewMenuHandler(service menuService) *MenuHandler {
 func (h *MenuHandler) GetAllMenuItems(c *gin.Context) {
 	items, err := h.service.GetAllMenuItems(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get menu items"})
+		apperror.Respond(c, err)
 		return
 	}
 	resp := make([]menuItemResponse, len(items))
@@ -118,14 +119,14 @@ func (h *MenuHandler) GetMenuItemByID(c *gin.Context) {
 	item, err := h.service.GetMenuItemByID(c.Request.Context(), id)
 	if err != nil {
 		if errors.Is(err, services.ErrInvalidMenuItemID) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid menu item id"})
+			apperror.Respond(c, err)
 			return
 		}
 		if errors.Is(err, services.ErrMenuItemNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "menu item not found"})
+			apperror.Respond(c, err)
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get menu item"})
+		apperror.Respond(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": toMenuItemByIDResponse(item)})
@@ -134,9 +135,7 @@ func (h *MenuHandler) GetMenuItemByID(c *gin.Context) {
 func (h *MenuHandler) GetAllCategories(c *gin.Context) {
 	categories, err := h.service.GetAllCategories(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "failed to get categories",
-		})
+		apperror.Respond(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -147,9 +146,7 @@ func (h *MenuHandler) GetAllCategories(c *gin.Context) {
 func (h *MenuHandler) CreateMenuItem(c *gin.Context) {
 	var req createMenuItemsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "invalid request body",
-		})
+		apperror.Respond(c, err)
 		return
 	}
 	args := db.CreateMenuItemParams{
@@ -167,14 +164,10 @@ func (h *MenuHandler) CreateMenuItem(c *gin.Context) {
 			errors.Is(err, services.ErrEmptyMenuItemName) ||
 			errors.Is(err, services.ErrZeroPrice) ||
 			errors.Is(err, services.ErrNegativePrice) {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": err.Error(),
-			})
+			apperror.Respond(c, err)
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "failed to create menu item",
-		})
+		apperror.Respond(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, gin.H{"data": toMenuItemFromCreate(item)})
@@ -186,9 +179,7 @@ func (h *MenuHandler) UpdateMenuItem(c *gin.Context) {
 	}
 	var req updateMenuItemsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "invalid request body",
-		})
+		apperror.Respond(c, err)
 		return
 	}
 	args := db.UpdateMenuItemParams{
@@ -208,20 +199,14 @@ func (h *MenuHandler) UpdateMenuItem(c *gin.Context) {
 			errors.Is(err, services.ErrEmptyMenuItemName) ||
 			errors.Is(err, services.ErrZeroPrice) ||
 			errors.Is(err, services.ErrNegativePrice) {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": err.Error(),
-			})
+			apperror.Respond(c, err)
 			return
 		}
 		if errors.Is(err, services.ErrMenuItemNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{
-				"error": "menu item not found",
-			})
+			apperror.Respond(c, err)
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "failed to update menu item",
-		})
+		apperror.Respond(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": toMenuItemFromCreate(item)})
@@ -234,20 +219,14 @@ func (h *MenuHandler) DeleteMenuItem(c *gin.Context) {
 	err := h.service.DeleteMenuItem(c.Request.Context(), int32(id))
 	if err != nil {
 		if errors.Is(err, services.ErrInvalidMenuItemID) {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "invalid menu item id",
-			})
+			apperror.Respond(c, err)
 			return
 		}
 		if errors.Is(err, services.ErrMenuItemNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{
-				"error": "menu item not found",
-			})
+			apperror.Respond(c, err)
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "failed to delete menu item",
-		})
+		apperror.Respond(c, err)
 		return
 	}
 	c.Status(http.StatusNoContent)

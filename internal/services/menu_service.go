@@ -1,6 +1,7 @@
 package services
 
 import (
+	"bar108/internal/apperror"
 	"bar108/internal/db"
 	"context"
 	"database/sql"
@@ -19,13 +20,13 @@ type menuStore interface {
 }
 
 var (
-	ErrMenuItemNotFound  = errors.New("menu item not found")
-	ErrCategoryNotFound  = errors.New("category not found")
-	ErrInvalidMenuItemID = errors.New("invalid menu item id")
-	ErrInvalidCategoryID = errors.New("invalid category id")
-	ErrEmptyMenuItemName = errors.New("menu item name is required")
-	ErrNegativePrice     = errors.New("price cannot be negative")
-	ErrZeroPrice         = errors.New("price must be greater than zero")
+	ErrMenuItemNotFound  = apperror.ErrMenuNotFound
+	ErrCategoryNotFound  = apperror.ErrNotFound
+	ErrInvalidMenuItemID = apperror.ErrInvalidID
+	ErrInvalidCategoryID = apperror.ErrInvalidID
+	ErrEmptyMenuItemName = apperror.ErrInvalidInput
+	ErrNegativePrice     = apperror.ErrNegativePrice
+	ErrZeroPrice         = apperror.ErrZeroPrice
 )
 
 type MenuService interface {
