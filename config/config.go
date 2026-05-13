@@ -56,13 +56,6 @@ func Load() (*Config, error) {
 
 // DSN builds the PostgreSQL connection string from the config.
 // Example: "host=localhost port=5432 user=bar108_user ..."
-func (c *DBConfig) DSN() string {
-	return fmt.Sprintf(
-		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
-		c.Host, c.Port, c.User, c.Password, c.Name, c.SSLMode,
-	)
-}
-
 // getEnv reads an environment variable and returns a fallback
 // value if it's not set. This prevents panics on missing vars.
 func getEnv(key, fallback string) string {
