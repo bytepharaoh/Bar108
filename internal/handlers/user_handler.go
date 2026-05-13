@@ -1,20 +1,26 @@
 package handlers
 
 import (
+	"bar108/internal/apperror"
 	"bar108/internal/db"
-	"bar108/internal/services"
-	"errors"
-	"github.com/gin-gonic/gin"
 	"net/http"
+
+	"github.com/gin-gonic/gin"
 )
 
 type UserHandler struct {
-	service services.UserService
+	service userService
 }
 
 func NewUserHandler(service userService) *UserHandler {
 	return &UserHandler{service: service}
 }
+
+// =============================================
+// Request structs — what the client sends us.
+// binding:"required" means Gin returns 400
+// automatically if the field is missing.
+// =============================================
 
 type createUserRequest struct {
 	Name         string `json:"name"          binding:"required"`
@@ -36,29 +42,33 @@ type updateBonusPointsRequest struct {
 	BonusPoints int32 `json:"bonus_points" binding:"required"`
 }
 
+// =============================================
+// Handlers
+// =============================================
+
 func (h *UserHandler) GetAllUsers(c *gin.Context) {
 	users, err := h.service.GetAllUsers(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get users"})
+		apperror.Respond(c, err)
 		return
 	}
+	// Always return [] instead of null for empty lists.
+	// null forces clients to do nil checks — [] is cleaner.
 	if users == nil {
 		users = []db.User{}
 	}
-
 	c.JSON(http.StatusOK, gin.H{"data": users})
 }
 
 func (h *UserHandler) GetActiveUsers(c *gin.Context) {
 	users, err := h.service.GetActiveUsers(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get active users"})
+		apperror.Respond(c, err)
 		return
 	}
 	if users == nil {
 		users = []db.User{}
 	}
-
 	c.JSON(http.StatusOK, gin.H{"data": users})
 }
 
@@ -69,15 +79,7 @@ func (h *UserHandler) GetUserByID(c *gin.Context) {
 	}
 	user, err := h.service.GetUserByID(c.Request.Context(), id)
 	if err != nil {
-		if errors.Is(err, services.ErrInvalidUserID) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
-			return
-		}
-		if errors.Is(err, services.ErrUserNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get user"})
+		apperror.Respond(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": user})
@@ -86,7 +88,9 @@ func (h *UserHandler) GetUserByID(c *gin.Context) {
 func (h *UserHandler) CreateUser(c *gin.Context) {
 	var req createUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		// Gin binding failure — missing required field.
+		// We respond with our standard error, not Gin's raw message.
+		apperror.Respond(c, apperror.ErrInvalidInput)
 		return
 	}
 	arg := db.CreateUserParams{
@@ -97,15 +101,7 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 	}
 	user, err := h.service.CreateUser(c.Request.Context(), arg)
 	if err != nil {
-		if errors.Is(err, services.ErrEmptyUserName) ||
-			errors.Is(err, services.ErrEmptyUserPhone) ||
-			errors.Is(err, services.ErrEmptyUserEmail) ||
-			errors.Is(err, services.ErrInvalidUserEmail) ||
-			errors.Is(err, services.ErrEmptyPasswordHash) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create user"})
+		apperror.Respond(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, gin.H{"data": user})
@@ -118,7 +114,7 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 	}
 	var req updateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		apperror.Respond(c, apperror.ErrInvalidInput)
 		return
 	}
 	arg := db.UpdateUserParams{
@@ -132,20 +128,7 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 	}
 	user, err := h.service.UpdateUser(c.Request.Context(), arg)
 	if err != nil {
-		if errors.Is(err, services.ErrInvalidUserID) ||
-			errors.Is(err, services.ErrEmptyUserName) ||
-			errors.Is(err, services.ErrEmptyUserPhone) ||
-			errors.Is(err, services.ErrEmptyUserEmail) ||
-			errors.Is(err, services.ErrInvalidUserEmail) ||
-			errors.Is(err, services.ErrEmptyPasswordHash) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		if errors.Is(err, services.ErrUserNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update user"})
+		apperror.Respond(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": user})
@@ -158,21 +141,12 @@ func (h *UserHandler) UpdateUserBonusPoints(c *gin.Context) {
 	}
 	var req updateBonusPointsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		apperror.Respond(c, apperror.ErrInvalidInput)
 		return
 	}
 	user, err := h.service.UpdateUserBonusPoints(c.Request.Context(), id, req.BonusPoints)
 	if err != nil {
-		if errors.Is(err, services.ErrInvalidUserID) ||
-			errors.Is(err, services.ErrNegativeBonusPoints) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		if errors.Is(err, services.ErrUserNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update bonus points"})
+		apperror.Respond(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": user})
@@ -185,20 +159,7 @@ func (h *UserHandler) ActivateUser(c *gin.Context) {
 	}
 	user, err := h.service.ActivateUser(c.Request.Context(), id)
 	if err != nil {
-		if errors.Is(err, services.ErrInvalidUserID) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
-			return
-		}
-		if errors.Is(err, services.ErrUserNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
-			return
-		}
-		if errors.Is(err, services.ErrUserAlreadyActive) {
-			// 409 Conflict — the resource is already in the requested state
-			c.JSON(http.StatusConflict, gin.H{"error": "user is already active"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to activate user"})
+		apperror.Respond(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": user})
@@ -211,25 +172,7 @@ func (h *UserHandler) DeactivateUser(c *gin.Context) {
 	}
 	user, err := h.service.DeactivateUser(c.Request.Context(), id)
 	if err != nil {
-		if errors.Is(err, services.ErrInvalidUserID) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
-			return
-		}
-		if errors.Is(err, services.ErrUserNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
-			return
-		}
-		if errors.Is(err, services.ErrUserAlreadyInactive) {
-			c.JSON(http.StatusConflict, gin.H{"error": "user is already inactive"})
-			return
-		}
-		if errors.Is(err, services.ErrUserHasActiveOrders) {
-			// 422 Unprocessable Entity — request is valid but can't be executed
-			// due to business logic (user has active orders)
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "user has active orders"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to deactivate user"})
+		apperror.Respond(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": user})

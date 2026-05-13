@@ -1,300 +1,384 @@
-// package services_test
+package services_test
 
-// import (
-// 	"bar108/internal/db"
-// 	"bar108/internal/repository/mocks"
-// 	"bar108/internal/services"
-// 	"context"
-// 	"database/sql"
-// 	"errors"
-// 	"testing"
+import (
+	"bar108/internal/apperror"
+	"bar108/internal/db"
+	"bar108/internal/services"
+	"bar108/internal/services/mocks"
+	"context"
+	"errors"
+	"testing"
 
-// 	"github.com/stretchr/testify/assert"
-// 	"github.com/stretchr/testify/require"
-// )
+	"go.uber.org/mock/gomock"
+)
 
-// // helper — builds a fresh service + mock for each test
-// // We create a new mock per test so tests don't interfere
-// // with each other
+// setupMenuService creates a fresh mock + service for each test.
+// We pass ctrl so gomock can verify expectations automatically
+// via t.Cleanup() — no need for defer ctrl.Finish().
+func setupMenuService(t *testing.T) (services.MenuService, *mocks.MockmenuStore) {
+	t.Helper() // marks this as a helper — errors point to the caller, not here
+	ctrl := gomock.NewController(t)
+	mockStore := mocks.NewMockmenuStore(ctrl)
+	svc := services.NewMenuService(mockStore)
+	return svc, mockStore
+}
 
-// func setupMenuService(t *testing.T) (services.MenuService, *mocks.MockMenuRepository) {
-// 	mockRepo := new(mocks.MockMenuRepository)
-// 	svc := services.NewMenuService(mockRepo)
-// 	return svc, mockRepo
-// }
-// func TestGetAllMenuItems_HappyPath(t *testing.T) {
-// 	svc, mockRepo := setupMenuService(t)
-// 	// What we expect the repo to return
+// =============================================
+// GetAllMenuItems
+// =============================================
 
-// 	expected := []db.GetAllMenuItemsRow{
-// 		{ID: 1, Name: "Classic Burger"},
-// 		{ID: 2, Name: "Coke"},
-// 	}
-// 	// Tell the mock: when GetAllMenuItems is called, return this
-// 	mockRepo.On("GetAllMenuItems", context.Background()).Return(expected, nil)
-// 	result, err := svc.GetAllMenuItems(context.Background())
-// 	require.NoError(t, err)
-// 	assert.Equal(t, expected, result)
-// 	mockRepo.AssertExpectations(t)
-// }
-// func TestGetMenuItems_EmptyList(t *testing.T) {
-// 	svc, mockRepo := setupMenuService(t)
-// 	//empty slice - valid case -- resturant has no items yet
-// 	mockRepo.On("GetAllMenuItems", context.Background()).Return([]db.GetAllMenuItemsRow{}, nil)
-// 	result, err := svc.GetAllMenuItems(context.Background())
-// 	require.NoError(t, err)
-// 	assert.Empty(t, result)
-// 	mockRepo.AssertExpectations(t)
-// }
-// func TestGetMenuItems_DB_Error(t *testing.T) {
-// 	svc, mockRepo := setupMenuService(t)
-// 	dbErr := errors.New("Connections refused")
-// 	mockRepo.On("GetAllMenuItems", context.Background()).Return([]db.GetAllMenuItemsRow{}, dbErr)
-// 	result, err := svc.GetAllMenuItems(context.Background())
-// 	require.Error(t, err)
-// 	assert.Empty(t, result)
-// 	assert.ErrorContains(t, err, "GetAllMenuItems service")
-// 	mockRepo.AssertExpectations(t)
-// }
-// func TestGetMenuItemByID_HappyPath(t *testing.T) {
-// 	svc, mockRepo := setupMenuService(t)
-// 	expected := db.GetMenuItemByIDRow{
-// 		ID: 1, Name: "Classic Burger",
-// 	}
-// 	mockRepo.On("GetMenuItemByID", context.Background(), int32(1)).Return(expected, nil)
-// 	result, err := svc.GetMenuItemByID(context.Background(), 1)
-// 	require.NoError(t, err)
-// 	assert.Equal(t, expected, result)
-// 	mockRepo.AssertExpectations(t)
-// }
-// func TestGetMenuItemByID_NotFound(t *testing.T) {
-// 	svc, mockRepo := setupMenuService(t)
-// 	mockRepo.On("GetMenuItemByID", context.Background(), int32(999)).Return(db.GetMenuItemByIDRow{}, sql.ErrNoRows)
+func TestMenuService_GetAllMenuItems(t *testing.T) {
+	tests := []struct {
+		name      string
+		setupMock func(m *mocks.MockmenuStore)
+		wantItems []db.GetAllMenuItemsRow
+		wantErr   error
+	}{
+		{
+			name: "happy path — returns all items",
+			setupMock: func(m *mocks.MockmenuStore) {
+				m.EXPECT().
+					GetAllMenuItems(gomock.Any()).
+					Return([]db.GetAllMenuItemsRow{
+						{ID: 1, Name: "Classic Burger"},
+						{ID: 2, Name: "Coke"},
+					}, nil)
+			},
+			wantItems: []db.GetAllMenuItemsRow{
+				{ID: 1, Name: "Classic Burger"},
+				{ID: 2, Name: "Coke"},
+			},
+			wantErr: nil,
+		},
+		{
+			name: "empty menu — valid, restaurant has no items yet",
+			setupMock: func(m *mocks.MockmenuStore) {
+				m.EXPECT().
+					GetAllMenuItems(gomock.Any()).
+					Return([]db.GetAllMenuItemsRow{}, nil)
+			},
+			wantItems: []db.GetAllMenuItemsRow{},
+			wantErr:   nil,
+		},
+		{
+			name: "database error — connection refused",
+			setupMock: func(m *mocks.MockmenuStore) {
+				m.EXPECT().
+					GetAllMenuItems(gomock.Any()).
+					Return(nil, errors.New("connection refused"))
+			},
+			wantItems: nil,
+			wantErr:   errors.New("connection refused"), // any non-nil error
+		},
+	}
 
-// 	_, err := svc.GetMenuItemByID(context.Background(), 999)
-// 	require.Error(t, err)
-// 	assert.ErrorIs(t, err, services.ErrMenuItemNotFound)
-// 	mockRepo.AssertExpectations(t)
-// }
-// func TestGetMenuItemByID_InvalidID_Zero(t *testing.T) {
-// 	svc, mockRepo := setupMenuService(t)
-// 	// ID = 0 is invalid — repo should never be called
-// 	_, err := svc.GetMenuItemByID(context.Background(), 0)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc, mockStore := setupMenuService(t)
+			tt.setupMock(mockStore)
 
-// 	require.Error(t, err)
-// 	assert.ErrorIs(t, err, services.ErrInvalidMenuItemID)
-// 	// AssertNotCalled proves the repo was never touched
-// 	mockRepo.AssertNotCalled(t, "GetMenuItemByID")
-// }
-// func TestGetMenuItemByID_InvalidID_Negative(t *testing.T) {
-// 	svc, mockRepo := setupMenuService(t)
+			items, err := svc.GetAllMenuItems(context.Background())
 
-// 	_, err := svc.GetMenuItemByID(context.Background(), -5)
+			if tt.wantErr != nil {
+				if err == nil {
+					t.Errorf("expected error but got nil")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+				if len(items) != len(tt.wantItems) {
+					t.Errorf("got %d items, want %d", len(items), len(tt.wantItems))
+				}
+			}
+		})
+	}
+}
 
-// 	require.Error(t, err)
-// 	assert.ErrorIs(t, err, services.ErrInvalidMenuItemID)
-// 	mockRepo.AssertNotCalled(t, "GetMenuItemByID")
-// }
-// func TestGetMenuItemByID_DatabaseError(t *testing.T) {
-// 	svc, mockRepo := setupMenuService(t)
-// 	dbErr := errors.New("timeout")
-// 	mockRepo.On("GetMenuItemByID", context.Background(), int32(1)).Return(db.GetMenuItemByIDRow{}, dbErr)
+// =============================================
+// GetMenuItemByID
+// =============================================
 
-// 	_, err := svc.GetMenuItemByID(context.Background(), 1)
-// 	require.Error(t, err)
-// 	assert.False(t, errors.Is(err, services.ErrMenuItemNotFound))
-// 	mockRepo.AssertExpectations(t)
-// }
+func TestMenuService_GetMenuItemByID(t *testing.T) {
+	tests := []struct {
+		name      string
+		id        int32
+		setupMock func(m *mocks.MockmenuStore)
+		wantItem  db.GetMenuItemByIDRow
+		wantErr   error
+	}{
+		{
+			name: "happy path — item found",
+			id:   1,
+			setupMock: func(m *mocks.MockmenuStore) {
+				m.EXPECT().
+					GetMenuItemByID(gomock.Any(), int32(1)).
+					Return(db.GetMenuItemByIDRow{ID: 1, Name: "Classic Burger"}, nil)
+			},
+			wantItem: db.GetMenuItemByIDRow{ID: 1, Name: "Classic Burger"},
+			wantErr:  nil,
+		},
+		{
+			name: "not found — item doesn't exist",
+			id:   999,
+			setupMock: func(m *mocks.MockmenuStore) {
+				m.EXPECT().
+					GetMenuItemByID(gomock.Any(), int32(999)).
+					Return(db.GetMenuItemByIDRow{}, apperror.ErrMenuNotFound)
+			},
+			wantItem: db.GetMenuItemByIDRow{},
+			wantErr:  apperror.ErrMenuNotFound,
+		},
+		{
+			// Invalid ID — mock should NEVER be called.
+			// The service validates input BEFORE hitting the store.
+			// gomock enforces this — if GetMenuItemByID is called,
+			// the test fails automatically because we set no EXPECT.
+			name:      "invalid id — zero",
+			id:        0,
+			setupMock: func(m *mocks.MockmenuStore) {}, // no expectations
+			wantErr:   apperror.ErrInvalidID,
+		},
+		{
+			name:      "invalid id — negative",
+			id:        -5,
+			setupMock: func(m *mocks.MockmenuStore) {},
+			wantErr:   apperror.ErrInvalidID,
+		},
+		{
+			name: "database error — unexpected failure",
+			id:   1,
+			setupMock: func(m *mocks.MockmenuStore) {
+				m.EXPECT().
+					GetMenuItemByID(gomock.Any(), int32(1)).
+					Return(db.GetMenuItemByIDRow{}, errors.New("timeout"))
+			},
+			wantErr: errors.New("timeout"),
+		},
+	}
 
-// // CreateMenuItems
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc, mockStore := setupMenuService(t)
+			tt.setupMock(mockStore)
 
-// func TestCreateMenuItem_HappyPath(t *testing.T) {
-// 	svc, mockRepo := setupMenuService(t)
-// 	arg := db.CreateMenuItemParams{
-// 		CategoryID: 1,
-// 		Name:       "Classic Burger",
-// 		Price:      "9.99",
-// 		Available:  true,
-// 	}
-// 	expected := db.MenuItem{ID: 1, Name: "Classic Burger"}
-// 	mockRepo.On("CreateMenuItem", context.Background(), arg).Return(expected, nil)
-// 	result, err := svc.CreateMenuItem(context.Background(), arg)
-// 	require.NoError(t, err)
-// 	assert.Equal(t, expected, result)
-// 	mockRepo.AssertExpectations(t)
-// }
-// func TestCreateMenuItem_EmptyName(t *testing.T) {
-// 	svc, mockRepo := setupMenuService(t)
+			item, err := svc.GetMenuItemByID(context.Background(), tt.id)
 
-// 	arg := db.CreateMenuItemParams{
-// 		CategoryID: 1,
-// 		Name:       "", // empty name
-// 	}
+			if tt.wantErr != nil {
+				if err == nil {
+					t.Fatalf("expected error %v but got nil", tt.wantErr)
+				}
+				// Check it's the right AppError when expected
+				var appErr *apperror.AppError
+				var wantAppErr *apperror.AppError
+				if errors.As(tt.wantErr, &wantAppErr) {
+					if !errors.As(err, &appErr) {
+						t.Errorf("expected AppError but got %T: %v", err, err)
+					} else if appErr.Code != wantAppErr.Code {
+						t.Errorf("got HTTP code %d, want %d", appErr.Code, wantAppErr.Code)
+					}
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+				if item.ID != tt.wantItem.ID {
+					t.Errorf("got item ID %d, want %d", item.ID, tt.wantItem.ID)
+				}
+			}
+		})
+	}
+}
 
-// 	_, err := svc.CreateMenuItem(context.Background(), arg)
+// =============================================
+// CreateMenuItem
+// =============================================
 
-// 	require.Error(t, err)
-// 	assert.ErrorIs(t, err, services.ErrEmptyMenuItemName)
-// 	mockRepo.AssertNotCalled(t, "CreateMenuItem")
-// }
-// func TestCreateMenuItem_WhitespaceName(t *testing.T) {
-// 	svc, mockRepo := setupMenuService(t)
+func TestMenuService_CreateMenuItem(t *testing.T) {
+	tests := []struct {
+		name      string
+		arg       db.CreateMenuItemParams
+		setupMock func(m *mocks.MockmenuStore)
+		wantErr   error
+	}{
+		{
+			name: "happy path",
+			arg: db.CreateMenuItemParams{
+				CategoryID: 1,
+				Name:       "Classic Burger",
+				Price:      "350.00",
+			},
+			setupMock: func(m *mocks.MockmenuStore) {
+				m.EXPECT().
+					CreateMenuItem(gomock.Any(), gomock.Any()).
+					Return(db.MenuItem{ID: 1, Name: "Classic Burger"}, nil)
+			},
+			wantErr: nil,
+		},
+		{
+			// Empty name — store must never be called
+			name: "empty name",
+			arg: db.CreateMenuItemParams{
+				CategoryID: 1,
+				Name:       "",
+				Price:      "350.00",
+			},
+			setupMock: func(m *mocks.MockmenuStore) {},
+			wantErr:   apperror.ErrInvalidInput,
+		},
+		{
+			// Whitespace name — trimmed to empty, same result
+			name: "whitespace name",
+			arg: db.CreateMenuItemParams{
+				CategoryID: 1,
+				Name:       "   ",
+				Price:      "350.00",
+			},
+			setupMock: func(m *mocks.MockmenuStore) {},
+			wantErr:   apperror.ErrInvalidInput,
+		},
+		{
+			name: "invalid category id — zero",
+			arg: db.CreateMenuItemParams{
+				CategoryID: 0,
+				Name:       "Classic Burger",
+				Price:      "350.00",
+			},
+			setupMock: func(m *mocks.MockmenuStore) {},
+			wantErr:   apperror.ErrInvalidID,
+		},
+		{
+			name: "zero price",
+			arg: db.CreateMenuItemParams{
+				CategoryID: 1,
+				Name:       "Classic Burger",
+				Price:      "0.00",
+			},
+			setupMock: func(m *mocks.MockmenuStore) {},
+			wantErr:   apperror.ErrZeroPrice,
+		},
+		{
+			name: "negative price",
+			arg: db.CreateMenuItemParams{
+				CategoryID: 1,
+				Name:       "Classic Burger",
+				Price:      "-10.00",
+			},
+			setupMock: func(m *mocks.MockmenuStore) {},
+			wantErr:   apperror.ErrNegativePrice,
+		},
+		{
+			name: "database error",
+			arg: db.CreateMenuItemParams{
+				CategoryID: 1,
+				Name:       "Classic Burger",
+				Price:      "350.00",
+			},
+			setupMock: func(m *mocks.MockmenuStore) {
+				m.EXPECT().
+					CreateMenuItem(gomock.Any(), gomock.Any()).
+					Return(db.MenuItem{}, errors.New("unique constraint violated"))
+			},
+			wantErr: errors.New("db error"),
+		},
+	}
 
-// 	arg := db.CreateMenuItemParams{
-// 		CategoryID: 1,
-// 		Name:       "   ", // spaces only — should fail
-// 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc, mockStore := setupMenuService(t)
+			tt.setupMock(mockStore)
 
-// 	_, err := svc.CreateMenuItem(context.Background(), arg)
+			_, err := svc.CreateMenuItem(context.Background(), tt.arg)
 
-// 	require.Error(t, err)
-// 	assert.ErrorIs(t, err, services.ErrEmptyMenuItemName)
-// 	mockRepo.AssertNotCalled(t, "CreateMenuItem")
-// }
-// func TestCreateMenuItem_InvalidCategoryID(t *testing.T) {
-// 	svc, mockRepo := setupMenuService(t)
+			if tt.wantErr != nil {
+				if err == nil {
+					t.Fatalf("expected error but got nil")
+				}
+				var appErr *apperror.AppError
+				var wantAppErr *apperror.AppError
+				if errors.As(tt.wantErr, &wantAppErr) && errors.As(err, &appErr) {
+					if appErr.Code != wantAppErr.Code {
+						t.Errorf("got HTTP code %d, want %d", appErr.Code, wantAppErr.Code)
+					}
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
 
-// 	arg := db.CreateMenuItemParams{
-// 		CategoryID: 0, // invalid
-// 		Name:       "Classic Burger",
-// 	}
+// =============================================
+// DeleteMenuItem
+// =============================================
 
-// 	_, err := svc.CreateMenuItem(context.Background(), arg)
+func TestMenuService_DeleteMenuItem(t *testing.T) {
+	tests := []struct {
+		name      string
+		id        int32
+		setupMock func(m *mocks.MockmenuStore)
+		wantErr   error
+	}{
+		{
+			name: "happy path",
+			id:   1,
+			setupMock: func(m *mocks.MockmenuStore) {
+				// Delete first checks existence, then deletes
+				m.EXPECT().
+					GetMenuItemByID(gomock.Any(), int32(1)).
+					Return(db.GetMenuItemByIDRow{ID: 1}, nil)
+				m.EXPECT().
+					DeleteMenuItem(gomock.Any(), int32(1)).
+					Return(nil)
+			},
+			wantErr: nil,
+		},
+		{
+			// Item doesn't exist — Delete should never be called.
+			// gomock enforces this automatically.
+			name: "item not found",
+			id:   999,
+			setupMock: func(m *mocks.MockmenuStore) {
+				m.EXPECT().
+					GetMenuItemByID(gomock.Any(), int32(999)).
+					Return(db.GetMenuItemByIDRow{}, apperror.ErrMenuNotFound)
+				// No EXPECT for DeleteMenuItem — gomock fails if it's called
+			},
+			wantErr: apperror.ErrMenuNotFound,
+		},
+		{
+			name:      "invalid id",
+			id:        0,
+			setupMock: func(m *mocks.MockmenuStore) {},
+			wantErr:   apperror.ErrInvalidID,
+		},
+	}
 
-// 	require.Error(t, err)
-// 	assert.ErrorIs(t, err, services.ErrInvalidCategoryID)
-// 	mockRepo.AssertNotCalled(t, "CreateMenuItem")
-// }
-// func TestCreateMenuItem_DatabaseError(t *testing.T) {
-// 	svc, mockRepo := setupMenuService(t)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc, mockStore := setupMenuService(t)
+			tt.setupMock(mockStore)
 
-// 	arg := db.CreateMenuItemParams{
-// 		CategoryID: 1,
-// 		Name:       "Classic Burger",
-// 		Price:      "9,99",
-// 		Available:  true,
-// 	}
+			err := svc.DeleteMenuItem(context.Background(), tt.id)
 
-// 	dbErr := errors.New("unique constraint violation")
-// 	mockRepo.On("CreateMenuItem", context.Background(), arg).
-// 		Return(db.MenuItem{}, dbErr)
-
-// 	_, err := svc.CreateMenuItem(context.Background(), arg)
-
-// 	require.Error(t, err)
-// 	assert.ErrorContains(t, err, "CreateMenuItem service")
-// 	mockRepo.AssertExpectations(t)
-// }
-
-// // DeleteMenuItem
-// func TestDeleteMenuItem_HappyPath(t *testing.T) {
-// 	svc, mockRepo := setupMenuService(t)
-
-// 	// First GetMenuItemByID is called to check existence
-// 	mockRepo.On("GetMenuItemByID", context.Background(), int32(1)).
-// 		Return(db.GetMenuItemByIDRow{ID: 1}, nil)
-
-// 	// Then DeleteMenuItem is called
-// 	mockRepo.On("DeleteMenuItem", context.Background(), int32(1)).
-// 		Return(nil)
-
-// 	err := svc.DeleteMenuItem(context.Background(), 1)
-
-// 	require.NoError(t, err)
-// 	mockRepo.AssertExpectations(t)
-// }
-// func TestDeleteMenuItem_NotFound(t *testing.T) {
-// 	svc, mockRepo := setupMenuService(t)
-
-// 	mockRepo.On("GetMenuItemByID", context.Background(), int32(999)).
-// 		Return(db.GetMenuItemByIDRow{}, sql.ErrNoRows)
-
-// 	err := svc.DeleteMenuItem(context.Background(), 999)
-
-// 	require.Error(t, err)
-// 	assert.ErrorIs(t, err, services.ErrMenuItemNotFound)
-// 	// Delete should never be called if item doesn't exist
-// 	mockRepo.AssertNotCalled(t, "DeleteMenuItem")
-// }
-// func TestDeleteMenuItem_InvalidID(t *testing.T) {
-// 	svc, mockRepo := setupMenuService(t)
-
-// 	err := svc.DeleteMenuItem(context.Background(), 0)
-
-// 	require.Error(t, err)
-// 	assert.ErrorIs(t, err, services.ErrInvalidMenuItemID)
-// 	mockRepo.AssertNotCalled(t, "GetMenuItemByID")
-// 	mockRepo.AssertNotCalled(t, "DeleteMenuItem")
-// }
-
-// // UpdateMenuItem
-// func TestUpdateMenuItem_HappyPath(t *testing.T) {
-// 	svc, mockRepo := setupMenuService(t)
-
-// 	arg := db.UpdateMenuItemParams{
-// 		ID:         1,
-// 		CategoryID: 1,
-// 		Name:       "Updated Burger",
-// 		Price:      "9.99",
-// 	}
-// 	expected := db.MenuItem{ID: 1, Name: "Updated Burger"}
-
-// 	mockRepo.On("UpdateMenuItem", context.Background(), arg).
-// 		Return(expected, nil)
-
-// 	result, err := svc.UpdateMenuItem(context.Background(), arg)
-
-// 	require.NoError(t, err)
-// 	assert.Equal(t, expected, result)
-// 	mockRepo.AssertExpectations(t)
-// }
-// func TestUpdateMenuItem_NotFound(t *testing.T) {
-// 	svc, mockRepo := setupMenuService(t)
-
-// 	arg := db.UpdateMenuItemParams{
-// 		ID:         999,
-// 		CategoryID: 1,
-// 		Name:       "Ghost Burger",
-// 		Price:      "9.99",
-// 	}
-
-// 	mockRepo.On("UpdateMenuItem", context.Background(), arg).
-// 		Return(db.MenuItem{}, sql.ErrNoRows)
-
-// 	_, err := svc.UpdateMenuItem(context.Background(), arg)
-
-// 	require.Error(t, err)
-// 	assert.ErrorIs(t, err, services.ErrMenuItemNotFound)
-// 	mockRepo.AssertExpectations(t)
-// }
-// func TestUpdateMenuItem_InvalidID(t *testing.T) {
-// 	svc, mockRepo := setupMenuService(t)
-
-// 	arg := db.UpdateMenuItemParams{
-// 		ID:         0,
-// 		CategoryID: 1,
-// 		Name:       "Some Burger",
-// 	}
-
-// 	_, err := svc.UpdateMenuItem(context.Background(), arg)
-
-// 	require.Error(t, err)
-// 	assert.ErrorIs(t, err, services.ErrInvalidMenuItemID)
-// 	mockRepo.AssertNotCalled(t, "UpdateMenuItem")
-// }
-
-// func TestUpdateMenuItem_EmptyName(t *testing.T) {
-// 	svc, mockRepo := setupMenuService(t)
-
-// 	arg := db.UpdateMenuItemParams{
-// 		ID:         1,
-// 		CategoryID: 1,
-// 		Name:       "",
-// 	}
-
-// 	_, err := svc.UpdateMenuItem(context.Background(), arg)
-
-// 	require.Error(t, err)
-// 	assert.ErrorIs(t, err, services.ErrEmptyMenuItemName)
-// 	mockRepo.AssertNotCalled(t, "UpdateMenuItem")
-// }
+			if tt.wantErr != nil {
+				if err == nil {
+					t.Fatalf("expected error but got nil")
+				}
+				var appErr *apperror.AppError
+				var wantAppErr *apperror.AppError
+				if errors.As(tt.wantErr, &wantAppErr) && errors.As(err, &appErr) {
+					if appErr.Code != wantAppErr.Code {
+						t.Errorf("got HTTP code %d, want %d", appErr.Code, wantAppErr.Code)
+					}
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
