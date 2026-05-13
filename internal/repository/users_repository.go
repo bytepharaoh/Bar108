@@ -8,24 +8,11 @@ import (
 	"fmt"
 )
 
-type UsersRepository interface {
-	ActivateUser(ctx context.Context, id int32) (db.User, error)
-	CreateUser(ctx context.Context, arg db.CreateUserParams) (db.User, error)
-	DeactivateUser(ctx context.Context, id int32) (db.User, error)
-	GetActiveUsers(ctx context.Context) ([]db.User, error)
-	GetAllUsers(ctx context.Context) ([]db.User, error)
-	GetUserByEmail(ctx context.Context, email string) (db.User, error)
-	GetUserByID(ctx context.Context, id int32) (db.User, error)
-	GetUserByPhone(ctx context.Context, phone string) (db.User, error)
-	HasActiveOrdersByUserID(ctx context.Context, userID int32) (bool, error)
-	UpdateUser(ctx context.Context, arg db.UpdateUserParams) (db.User, error)
-	UpdateUserBonusPoints(ctx context.Context, arg db.UpdateUserBonusPointsParams) (db.User, error)
-}
 type usersRepository struct {
 	queries *db.Queries
 }
 
-func NewUserRepository(conn *sql.DB) UsersRepository {
+func NewUserRepository(conn *sql.DB) *usersRepository {
 	return &usersRepository{
 		queries: db.New(conn),
 	}

@@ -2,13 +2,21 @@ package services
 
 import (
 	"bar108/internal/db"
-	"bar108/internal/repository"
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
 )
+
+type menuStore interface {
+	GetAllMenuItems(ctx context.Context) ([]db.GetAllMenuItemsRow, error)
+	GetMenuItemByID(ctx context.Context, id int32) (db.GetMenuItemByIDRow, error)
+	GetAllCategories(ctx context.Context) ([]db.Category, error)
+	CreateMenuItem(ctx context.Context, arg db.CreateMenuItemParams) (db.MenuItem, error)
+	UpdateMenuItem(ctx context.Context, arg db.UpdateMenuItemParams) (db.MenuItem, error)
+	DeleteMenuItem(ctx context.Context, id int32) error
+}
 
 var (
 	ErrMenuItemNotFound  = errors.New("menu item not found")
@@ -29,12 +37,12 @@ type MenuService interface {
 	DeleteMenuItem(ctx context.Context, id int32) error
 }
 type menuService struct {
-	repo repository.MenuRepository
+	store menuStore
 }
 
-func NewMenuService(repo repository.MenuRepository) MenuService {
+func NewMenuService(store menuStore) MenuService {
 	return &menuService{
-		repo: repo,
+		store: store,
 	}
 
 }
@@ -68,7 +76,7 @@ func validatePrice(price string) error {
 
 }
 func (s *menuService) GetAllMenuItems(ctx context.Context) ([]db.GetAllMenuItemsRow, error) {
-	items, err := s.repo.GetAllMenuItems(ctx)
+	items, err := s.store.GetAllMenuItems(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("GetAllMenuItems service: %w", err)
 	}
@@ -78,7 +86,7 @@ func (s *menuService) GetMenuItemByID(ctx context.Context, id int32) (db.GetMenu
 	if err := validateMenuItemId(id); err != nil {
 		return db.GetMenuItemByIDRow{}, err
 	}
-	item, err := s.repo.GetMenuItemByID(ctx, id)
+	item, err := s.store.GetMenuItemByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return db.GetMenuItemByIDRow{}, ErrMenuItemNotFound
@@ -89,7 +97,7 @@ func (s *menuService) GetMenuItemByID(ctx context.Context, id int32) (db.GetMenu
 
 }
 func (s *menuService) GetAllCategories(ctx context.Context) ([]db.Category, error) {
-	categories, err := s.repo.GetAllCategories(ctx)
+	categories, err := s.store.GetAllCategories(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("GetAllCategories service: %w", err)
 	}
@@ -106,7 +114,7 @@ func (s *menuService) CreateMenuItem(ctx context.Context, arg db.CreateMenuItemP
 		return db.MenuItem{}, err
 	}
 	arg.Available = true
-	item, err := s.repo.CreateMenuItem(ctx, arg)
+	item, err := s.store.CreateMenuItem(ctx, arg)
 	if err != nil {
 		return db.MenuItem{}, fmt.Errorf("CreateMenuItem service: %w", err)
 	}
@@ -126,7 +134,7 @@ func (s *menuService) UpdateMenuItem(ctx context.Context, arg db.UpdateMenuItemP
 	if err := validatePrice(arg.Price); err != nil {
 		return db.MenuItem{}, err
 	}
-	item, err := s.repo.UpdateMenuItem(ctx, arg)
+	item, err := s.store.UpdateMenuItem(ctx, arg)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return db.MenuItem{}, ErrMenuItemNotFound
@@ -142,7 +150,7 @@ func (s *menuService) DeleteMenuItem(ctx context.Context, id int32) error {
 		return err
 	}
 
-	_, err := s.repo.GetMenuItemByID(ctx, id)
+	_, err := s.store.GetMenuItemByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrMenuItemNotFound
@@ -150,7 +158,7 @@ func (s *menuService) DeleteMenuItem(ctx context.Context, id int32) error {
 		return fmt.Errorf("DeleteMenuItem service get item: %w", err)
 	}
 
-	if err := s.repo.DeleteMenuItem(ctx, id); err != nil {
+	if err := s.store.DeleteMenuItem(ctx, id); err != nil {
 		return fmt.Errorf("DeleteMenuItem service: %w", err)
 	}
 	return nil

@@ -10,20 +10,71 @@ import (
 
 type Querier interface {
 	ActivateUser(ctx context.Context, id int32) (User, error)
+	// Assigns a courier to an order.
+	// This also updates status to 'out_for_delivery' automatically
+	// because you only assign a courier when the order is ready to go.
+	AssignCourier(ctx context.Context, arg AssignCourierParams) (Order, error)
+	CancelOrder(ctx context.Context, id int32) (Order, error)
 	CreateMenuItem(ctx context.Context, arg CreateMenuItemParams) (MenuItem, error)
+	// ORDERS
+	// Creates the main order row.
+	// Returns the full order so we can use its ID immediately.
+	CreateOrder(ctx context.Context, arg CreateOrderParams) (Order, error)
+	// ORDER ITEMS
+	// Inserts one item line into an order.
+	// unit_price is passed explicitly — it's a snapshot
+	// of the price at the time of ordering, NOT a live reference.
+	// This is critical: menu prices can change, but order history must not.
+	CreateOrderItem(ctx context.Context, arg CreateOrderItemParams) (OrderItem, error)
+	// ORDER STATUS HISTORY
+	// Called every time an order status changes.
+	// Builds the full timeline a customer sees when tracking their order.
+	CreateOrderStatusHistory(ctx context.Context, arg CreateOrderStatusHistoryParams) (OrderStatusHistory, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeactivateUser(ctx context.Context, id int32) (User, error)
 	DeleteMenuItem(ctx context.Context, id int32) error
 	GetActiveUsers(ctx context.Context) ([]User, error)
 	GetAllCategories(ctx context.Context) ([]Category, error)
+	// COURIERS
+	GetAllCouriers(ctx context.Context) ([]Courier, error)
 	GetAllMenuItems(ctx context.Context) ([]GetAllMenuItemsRow, error)
+	// Admin endpoint — all orders, newest first.
+	GetAllOrders(ctx context.Context) ([]GetAllOrdersRow, error)
 	GetAllUsers(ctx context.Context) ([]User, error)
+	// Only couriers with status = 'available' can be assigned.
+	GetAvailableCouriers(ctx context.Context) ([]Courier, error)
+	GetCourierByID(ctx context.Context, id int32) (Courier, error)
 	GetMenuItemByID(ctx context.Context, id int32) (GetMenuItemByIDRow, error)
+	// Fetches a single order with its user info joined.
+	// We join users so the handler can return customer name
+	// without a second query.
+	GetOrderByID(ctx context.Context, id int32) (GetOrderByIDRow, error)
+	// All items for a given order, with menu item name joined.
+	// We join menu_items so we don't need a second query to get names.
+	GetOrderItems(ctx context.Context, orderID int32) ([]GetOrderItemsRow, error)
+	// Full status timeline for an order, oldest first.
+	// This is what the customer sees: "Confirmed at 13:02, Preparing at 13:15..."
+	GetOrderStatusHistory(ctx context.Context, orderID int32) ([]OrderStatusHistory, error)
+	// All orders for a specific user, newest first.
+	GetOrdersByUserID(ctx context.Context, userID int32) ([]GetOrdersByUserIDRow, error)
+	// Admin dashboard — only unprocessed orders.
+	GetPendingOrders(ctx context.Context) ([]GetPendingOrdersRow, error)
+	// PROMOTIONS
+	// Looks up a promo code. Called before placing an order
+	// to validate and calculate the discount.
+	GetPromotionByCode(ctx context.Context, code string) (Promotion, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id int32) (User, error)
 	GetUserByPhone(ctx context.Context, phone string) (User, error)
 	HasActiveOrdersByUserID(ctx context.Context, userID int32) (bool, error)
+	// Called after an order is placed with a promo code.
+	// Increments the used_count so we can track and enforce usage_limit.
+	IncrementPromotionUsage(ctx context.Context, id int32) (Promotion, error)
+	UpdateCourierStatus(ctx context.Context, arg UpdateCourierStatusParams) (Courier, error)
 	UpdateMenuItem(ctx context.Context, arg UpdateMenuItemParams) (MenuItem, error)
+	// Changes the order status.
+	// updated_at is refreshed so we know when the last change was.
+	UpdateOrderStatus(ctx context.Context, arg UpdateOrderStatusParams) (Order, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
 	UpdateUserBonusPoints(ctx context.Context, arg UpdateUserBonusPointsParams) (User, error)
 }

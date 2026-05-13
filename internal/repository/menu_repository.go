@@ -9,14 +9,6 @@ import (
 )
 
 // MenuRepository defines all database operations for the menu.
-type MenuRepository interface {
-	GetAllMenuItems(ctx context.Context) ([]db.GetAllMenuItemsRow, error)
-	GetMenuItemByID(ctx context.Context, id int32) (db.GetMenuItemByIDRow, error)
-	GetAllCategories(ctx context.Context) ([]db.Category, error)
-	CreateMenuItem(ctx context.Context, arg db.CreateMenuItemParams) (db.MenuItem, error)
-	UpdateMenuItem(ctx context.Context, arg db.UpdateMenuItemParams) (db.MenuItem, error)
-	DeleteMenuItem(ctx context.Context, id int32) error
-}
 
 // menuRepository is the concrete implementation — the real one that talks to PostgreSQL.
 
@@ -24,7 +16,7 @@ type menuRepository struct {
 	queries *db.Queries
 }
 
-func NewMenuRepository(conn *sql.DB) MenuRepository {
+func NewMenuRepository(conn *sql.DB) *menuRepository {
 	return &menuRepository{
 		queries: db.New(conn),
 	}

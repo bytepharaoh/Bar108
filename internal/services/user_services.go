@@ -2,13 +2,26 @@ package services
 
 import (
 	"bar108/internal/db"
-	"bar108/internal/repository"
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
 )
+
+type userStore interface {
+	CreateUser(ctx context.Context, arg db.CreateUserParams) (db.User, error)
+	GetAllUsers(ctx context.Context) ([]db.User, error)
+	GetActiveUsers(ctx context.Context) ([]db.User, error)
+	GetUserByID(ctx context.Context, id int32) (db.User, error)
+	GetUserByEmail(ctx context.Context, email string) (db.User, error)
+	GetUserByPhone(ctx context.Context, phone string) (db.User, error)
+	UpdateUser(ctx context.Context, arg db.UpdateUserParams) (db.User, error)
+	UpdateUserBonusPoints(ctx context.Context, arg db.UpdateUserBonusPointsParams) (db.User, error)
+	ActivateUser(ctx context.Context, id int32) (db.User, error)
+	DeactivateUser(ctx context.Context, id int32) (db.User, error)
+	HasActiveOrdersByUserID(ctx context.Context, userID int32) (bool, error)
+}
 
 var (
 	ErrInvalidUserID       = errors.New("invalid user id")
@@ -37,12 +50,12 @@ type UserService interface {
 	ActivateUser(ctx context.Context, id int32) (db.User, error)
 }
 type userService struct {
-	repo repository.UsersRepository
+	store userStore
 }
 
-func NewUserService(repo repository.UsersRepository) UserService {
+func NewUserService(store userStore) UserService {
 	return &userService{
-		repo: repo,
+		store: store,
 	}
 }
 func validateUserID(id int32) error {
@@ -77,7 +90,7 @@ func (s *userService) GetUserByID(ctx context.Context, id int32) (db.User, error
 	if err := validateUserID(id); err != nil {
 		return db.User{}, err
 	}
-	user, err := s.repo.GetUserByID(ctx, id)
+	user, err := s.store.GetUserByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return db.User{}, ErrUserNotFound
@@ -94,7 +107,7 @@ func (s *userService) CreateUser(ctx context.Context, arg db.CreateUserParams) (
 	// Business rule: new users always start with 0 bonus points
 
 	arg.BonusPoints = 0
-	user, err := s.repo.CreateUser(ctx, arg)
+	user, err := s.store.CreateUser(ctx, arg)
 	if err != nil {
 		return db.User{}, fmt.Errorf("CreateUser service: %w", err)
 	}
@@ -103,14 +116,14 @@ func (s *userService) CreateUser(ctx context.Context, arg db.CreateUserParams) (
 
 }
 func (s *userService) GetAllUsers(ctx context.Context) ([]db.User, error) {
-	users, err := s.repo.GetAllUsers(ctx)
+	users, err := s.store.GetAllUsers(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("GetAllUsers service: %w", err)
 	}
 	return users, nil
 }
 func (s *userService) GetActiveUsers(ctx context.Context) ([]db.User, error) {
-	users, err := s.repo.GetActiveUsers(ctx)
+	users, err := s.store.GetActiveUsers(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("GetActiveUsers service: %w", err)
 	}
@@ -124,7 +137,7 @@ func (s *userService) GetUserByEmail(ctx context.Context, email string) (db.User
 	if !strings.Contains(email, "@") {
 		return db.User{}, ErrInvalidUserEmail
 	}
-	users, err := s.repo.GetUserByEmail(ctx, email)
+	users, err := s.store.GetUserByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return db.User{}, ErrUserNotFound
@@ -138,7 +151,7 @@ func (s *userService) GetUserByPhone(ctx context.Context, phone string) (db.User
 	if phone == "" {
 		return db.User{}, ErrEmptyUserPhone
 	}
-	user, err := s.repo.GetUserByPhone(ctx, phone)
+	user, err := s.store.GetUserByPhone(ctx, phone)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return db.User{}, ErrUserNotFound
@@ -157,7 +170,7 @@ func (s *userService) UpdateUser(ctx context.Context, arg db.UpdateUserParams) (
 	if arg.BonusPoints < 0 {
 		return db.User{}, ErrNegativeBonusPoints
 	}
-	user, err := s.repo.UpdateUser(ctx, arg)
+	user, err := s.store.UpdateUser(ctx, arg)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return db.User{}, ErrUserNotFound
@@ -178,7 +191,7 @@ func (s *userService) UpdateUserBonusPoints(ctx context.Context, id int32, bonus
 		ID:          id,
 		BonusPoints: bonusPoints,
 	}
-	user, err := s.repo.UpdateUserBonusPoints(ctx, arg)
+	user, err := s.store.UpdateUserBonusPoints(ctx, arg)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return db.User{}, ErrUserNotFound
@@ -191,7 +204,7 @@ func (s *userService) ActivateUser(ctx context.Context, id int32) (db.User, erro
 	if err := validateUserID(id); err != nil {
 		return db.User{}, err
 	}
-	user, err := s.repo.GetUserByID(ctx, id)
+	user, err := s.store.GetUserByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return db.User{}, ErrUserNotFound
@@ -201,7 +214,7 @@ func (s *userService) ActivateUser(ctx context.Context, id int32) (db.User, erro
 	if user.IsActive {
 		return db.User{}, ErrUserAlreadyActive
 	}
-	activatedUser, err := s.repo.ActivateUser(ctx, id)
+	activatedUser, err := s.store.ActivateUser(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return db.User{}, ErrUserNotFound
@@ -215,7 +228,7 @@ func (s *userService) DeactivateUser(ctx context.Context, id int32) (db.User, er
 	if err := validateUserID(id); err != nil {
 		return db.User{}, err
 	}
-	user, err := s.repo.GetUserByID(ctx, id)
+	user, err := s.store.GetUserByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return db.User{}, ErrUserNotFound
@@ -225,14 +238,14 @@ func (s *userService) DeactivateUser(ctx context.Context, id int32) (db.User, er
 	if !user.IsActive {
 		return db.User{}, ErrUserAlreadyInactive
 	}
-	hasActiveOrders, err := s.repo.HasActiveOrdersByUserID(ctx, id)
+	hasActiveOrders, err := s.store.HasActiveOrdersByUserID(ctx, id)
 	if err != nil {
 		return db.User{}, fmt.Errorf("DeactivateUser service check active orders: %w", err)
 	}
 	if hasActiveOrders {
 		return db.User{}, ErrUserHasActiveOrders
 	}
-	deactivatedUser, err := s.repo.DeactivateUser(ctx, id)
+	deactivatedUser, err := s.store.DeactivateUser(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return db.User{}, ErrUserNotFound

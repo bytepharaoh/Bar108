@@ -92,7 +92,7 @@ func toMenuItemFromCreate(item db.MenuItem) menuItemResponse {
 	}
 }
 
-func NewMenuHandler(service services.MenuService) *MenuHandler {
+func NewMenuHandler(service menuService) *MenuHandler {
 	return &MenuHandler{
 		service: service,
 	}
