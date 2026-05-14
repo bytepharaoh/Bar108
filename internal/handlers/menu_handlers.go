@@ -146,7 +146,7 @@ func (h *MenuHandler) GetAllCategories(c *gin.Context) {
 func (h *MenuHandler) CreateMenuItem(c *gin.Context) {
 	var req createMenuItemsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apperror.Respond(c, err)
+		apperror.Respond(c, apperror.ErrInvalidInput)
 		return
 	}
 	args := db.CreateMenuItemParams{
@@ -179,7 +179,7 @@ func (h *MenuHandler) UpdateMenuItem(c *gin.Context) {
 	}
 	var req updateMenuItemsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apperror.Respond(c, err)
+		apperror.Respond(c, apperror.ErrInvalidInput)
 		return
 	}
 	args := db.UpdateMenuItemParams{
