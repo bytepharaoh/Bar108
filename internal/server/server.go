@@ -84,6 +84,34 @@ func (s *Server) setupRoutes(db *sql.DB) {
 		users.PATCH("/:id/deactivate", userHandler.DeactivateUser)
 	}
 
+	orderRepo := newOrderRepository(db)
+	orderSvc := newOrderService(orderRepo)
+	orderHandler := newOrderHandler(orderSvc)
+	// Order routes
+	orders := s.router.Group("/orders")
+	{
+		orders.POST("", orderHandler.PlaceOrder)
+		orders.GET("", orderHandler.GetAllOrders)
+		orders.GET("/pending", orderHandler.GetPendingOrders)
+		orders.GET("/:id", orderHandler.GetOrderByID)
+		orders.GET("/:id/track", orderHandler.GetOrderStatusHistory)
+		orders.GET("/:id/items", orderHandler.GetOrderItems)
+		orders.PATCH("/:id/status", orderHandler.UpdateOrderStatus)
+		orders.PATCH("/:id/cancel", orderHandler.CancelOrder)
+		orders.PATCH("/:id/courier", orderHandler.AssignCourier)
+	}
+
+	// User orders
+	s.router.GET("/users/:id/orders", orderHandler.GetOrdersByUserID)
+	// Courier routes
+	couriers := s.router.Group("/couriers")
+	{
+		couriers.GET("", orderHandler.GetAllCouriers)
+		couriers.GET("/available", orderHandler.GetAvailableCouriers)
+		couriers.GET("/:id", orderHandler.GetCourierByID)
+		couriers.PATCH("/:id/status", orderHandler.UpdateCourierStatus)
+	}
+
 }
 func (s *Server) Run() {
 	go func() {

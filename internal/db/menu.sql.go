@@ -66,7 +66,7 @@ func (q *Queries) DeleteMenuItem(ctx context.Context, id int32) error {
 const getAllCategories = `-- name: GetAllCategories :many
 SELECT id, name, created_at
 FROM categories
-ORDER BY name
+ORDER BY name ASC
 `
 
 func (q *Queries) GetAllCategories(ctx context.Context) ([]Category, error) {

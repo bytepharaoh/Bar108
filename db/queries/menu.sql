@@ -30,7 +30,7 @@ WHERE m.id = $1;
 -- name: GetAllCategories :many
 SELECT id, name, created_at
 FROM categories
-ORDER BY name;
+ORDER BY name ASC;
 
 -- name: CreateMenuItem :one
 INSERT INTO menu_items (

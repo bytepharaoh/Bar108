@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bar108/internal/handlers"
 	"bar108/internal/repository"
 	"bar108/internal/services"
 	"database/sql"
@@ -20,4 +21,15 @@ func newMenuService(repo *repository.MenuRepository) services.MenuService {
 
 func newUserService(repo *repository.UsersRepository) services.UserService {
 	return services.NewUserService(repo)
+}
+func newOrderRepository(db *sql.DB) repository.OrderRepository {
+	return repository.NewOrderRepository(db)
+}
+
+func newOrderService(repo repository.OrderRepository) services.OrderService {
+	return services.NewOrderService(repo)
+}
+
+func newOrderHandler(svc services.OrderService) *handlers.OrderHandler {
+	return handlers.NewOrderHandler(svc)
 }

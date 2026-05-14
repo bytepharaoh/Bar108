@@ -333,7 +333,17 @@ func (r *orderRepository) GetOrderStatusHistory(ctx context.Context, orderID int
 }
 
 func (r *orderRepository) UpdateOrderStatus(ctx context.Context, id int32, status string) (db.Order, error) {
-	order, err := r.queries.UpdateOrderStatus(ctx, db.UpdateOrderStatusParams{
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return db.Order{}, fmt.Errorf("UpdateOrderStatus begin tx: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	qtx := r.queries.WithTx(tx)
+
+	order, err := qtx.UpdateOrderStatus(ctx, db.UpdateOrderStatusParams{
 		ID:     id,
 		Status: status,
 	})
@@ -343,11 +353,34 @@ func (r *orderRepository) UpdateOrderStatus(ctx context.Context, id int32, statu
 		}
 		return db.Order{}, fmt.Errorf("UpdateOrderStatus: %w", err)
 	}
+
+	_, err = qtx.CreateOrderStatusHistory(ctx, db.CreateOrderStatusHistoryParams{
+		OrderID: id,
+		Status:  status,
+		Note:    sql.NullString{String: "Order status updated to " + status, Valid: true},
+	})
+	if err != nil {
+		return db.Order{}, fmt.Errorf("UpdateOrderStatus create history: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return db.Order{}, fmt.Errorf("UpdateOrderStatus commit: %w", err)
+	}
+
 	return order, nil
 }
-
 func (r *orderRepository) AssignCourier(ctx context.Context, orderID int32, courierID int32) (db.Order, error) {
-	order, err := r.queries.AssignCourier(ctx, db.AssignCourierParams{
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return db.Order{}, fmt.Errorf("AssignCourier begin tx: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	qtx := r.queries.WithTx(tx)
+
+	order, err := qtx.AssignCourier(ctx, db.AssignCourierParams{
 		ID:        orderID,
 		CourierID: sql.NullInt32{Int32: courierID, Valid: true},
 	})
@@ -357,20 +390,56 @@ func (r *orderRepository) AssignCourier(ctx context.Context, orderID int32, cour
 		}
 		return db.Order{}, fmt.Errorf("AssignCourier: %w", err)
 	}
+
+	_, err = qtx.CreateOrderStatusHistory(ctx, db.CreateOrderStatusHistoryParams{
+		OrderID: orderID,
+		Status:  order.Status,
+		Note:    sql.NullString{String: fmt.Sprintf("Courier %d assigned", courierID), Valid: true},
+	})
+	if err != nil {
+		return db.Order{}, fmt.Errorf("AssignCourier create history: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return db.Order{}, fmt.Errorf("AssignCourier commit: %w", err)
+	}
+
 	return order, nil
 }
-
 func (r *orderRepository) CancelOrder(ctx context.Context, id int32) (db.Order, error) {
-	order, err := r.queries.CancelOrder(ctx, id)
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return db.Order{}, fmt.Errorf("CancelOrder begin tx: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	qtx := r.queries.WithTx(tx)
+
+	order, err := qtx.CancelOrder(ctx, id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return db.Order{}, apperror.ErrOrderNotFound
 		}
 		return db.Order{}, fmt.Errorf("CancelOrder: %w", err)
 	}
+
+	_, err = qtx.CreateOrderStatusHistory(ctx, db.CreateOrderStatusHistoryParams{
+		OrderID: id,
+		Status:  "cancelled",
+		Note:    sql.NullString{String: "Order cancelled", Valid: true},
+	})
+	if err != nil {
+		return db.Order{}, fmt.Errorf("CancelOrder create history: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return db.Order{}, fmt.Errorf("CancelOrder commit: %w", err)
+	}
+
 	return order, nil
 }
-
 func (r *orderRepository) GetAllCouriers(ctx context.Context) ([]db.Courier, error) {
 	couriers, err := r.queries.GetAllCouriers(ctx)
 	if err != nil {
