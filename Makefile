@@ -88,6 +88,9 @@ mocks:
 	mockgen -source=internal/services/user_services.go \
 		-destination=internal/services/mocks/user_service_mock.go \
 		-package=mocks
+	mockgen -source=internal/services/order_service.go \
+		-destination=internal/services/mocks/order_service_mock.go \
+		-package=mocks
 	mockgen -source=internal/repository/order_repository.go \
 		-destination=internal/repository/mocks/order_repository_mock.go \
 		-package=mocks
