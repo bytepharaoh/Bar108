@@ -97,6 +97,8 @@ mocks:
 	mockgen -source=internal/repository/menu_repository.go \
 		-destination=internal/repository/mocks/menu_repository_mock.go \
 		-package=mocks
+jwt:
+	openssl rand -hex 32
 # ——— Help ——————————————————————————————————
 
 ## help: print all available commands
@@ -104,4 +106,4 @@ help:
 	@echo "Available commands:"
 	@sed -n 's/^##//p' $(MAKEFILE_LIST) | column -t -s ':' | sed -e 's/^/ /'
 
-.PHONY: run build clean fmt lint vet check db-up db-down db-logs help migrate db-shell sqlc migrate-up migrate-down test test-coverage generate mocks
+.PHONY: run build clean fmt lint vet check db-up db-down db-logs help migrate db-shell sqlc migrate-up migrate-down test test-coverage generate mocks jwt

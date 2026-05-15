@@ -13,7 +13,7 @@ const activateUser = `-- name: ActivateUser :one
 UPDATE users
 SET is_active = true
 WHERE id = $1
-RETURNING id, name, phone, email, password_hash, bonus_points, created_at, is_active
+RETURNING id, name, phone, email, password_hash, bonus_points, created_at, is_active, role
 `
 
 func (q *Queries) ActivateUser(ctx context.Context, id int32) (User, error) {
@@ -28,6 +28,7 @@ func (q *Queries) ActivateUser(ctx context.Context, id int32) (User, error) {
 		&i.BonusPoints,
 		&i.CreatedAt,
 		&i.IsActive,
+		&i.Role,
 	)
 	return i, err
 }
@@ -42,7 +43,7 @@ INSERT INTO users (
 ) VALUES (
     $1, $2, $3, $4, $5
 )
-RETURNING id, name, phone, email, password_hash, bonus_points, created_at, is_active
+RETURNING id, name, phone, email, password_hash, bonus_points, created_at, is_active, role
 `
 
 type CreateUserParams struct {
@@ -71,6 +72,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.BonusPoints,
 		&i.CreatedAt,
 		&i.IsActive,
+		&i.Role,
 	)
 	return i, err
 }
@@ -79,7 +81,7 @@ const deactivateUser = `-- name: DeactivateUser :one
 UPDATE users
 SET is_active = false
 WHERE id = $1
-RETURNING id, name, phone, email, password_hash, bonus_points, created_at, is_active
+RETURNING id, name, phone, email, password_hash, bonus_points, created_at, is_active, role
 `
 
 func (q *Queries) DeactivateUser(ctx context.Context, id int32) (User, error) {
@@ -94,12 +96,13 @@ func (q *Queries) DeactivateUser(ctx context.Context, id int32) (User, error) {
 		&i.BonusPoints,
 		&i.CreatedAt,
 		&i.IsActive,
+		&i.Role,
 	)
 	return i, err
 }
 
 const getActiveUsers = `-- name: GetActiveUsers :many
-SELECT id, name, phone, email, password_hash, bonus_points, created_at, is_active
+SELECT id, name, phone, email, password_hash, bonus_points, created_at, is_active, role
 FROM users
 WHERE is_active = true
 ORDER BY created_at DESC
@@ -123,6 +126,7 @@ func (q *Queries) GetActiveUsers(ctx context.Context) ([]User, error) {
 			&i.BonusPoints,
 			&i.CreatedAt,
 			&i.IsActive,
+			&i.Role,
 		); err != nil {
 			return nil, err
 		}
@@ -138,7 +142,7 @@ func (q *Queries) GetActiveUsers(ctx context.Context) ([]User, error) {
 }
 
 const getAllUsers = `-- name: GetAllUsers :many
-SELECT id, name, phone, email, password_hash, bonus_points, created_at, is_active
+SELECT id, name, phone, email, password_hash, bonus_points, created_at, is_active, role
 FROM users
 ORDER BY created_at DESC
 `
@@ -161,6 +165,7 @@ func (q *Queries) GetAllUsers(ctx context.Context) ([]User, error) {
 			&i.BonusPoints,
 			&i.CreatedAt,
 			&i.IsActive,
+			&i.Role,
 		); err != nil {
 			return nil, err
 		}
@@ -176,7 +181,7 @@ func (q *Queries) GetAllUsers(ctx context.Context) ([]User, error) {
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, name, phone, email, password_hash, bonus_points, created_at, is_active
+SELECT id, name, phone, email, password_hash, bonus_points, created_at, is_active, role
 FROM users
 WHERE email = $1
 `
@@ -193,12 +198,40 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.BonusPoints,
 		&i.CreatedAt,
 		&i.IsActive,
+		&i.Role,
+	)
+	return i, err
+}
+
+const getUserByEmailForAuth = `-- name: GetUserByEmailForAuth :one
+SELECT id, email, password_hash, role, is_active
+FROM users
+WHERE email = $1
+`
+
+type GetUserByEmailForAuthRow struct {
+	ID           int32  `json:"id"`
+	Email        string `json:"email"`
+	PasswordHash string `json:"password_hash"`
+	Role         string `json:"role"`
+	IsActive     bool   `json:"is_active"`
+}
+
+func (q *Queries) GetUserByEmailForAuth(ctx context.Context, email string) (GetUserByEmailForAuthRow, error) {
+	row := q.db.QueryRowContext(ctx, getUserByEmailForAuth, email)
+	var i GetUserByEmailForAuthRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Role,
+		&i.IsActive,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, name, phone, email, password_hash, bonus_points, created_at, is_active
+SELECT id, name, phone, email, password_hash, bonus_points, created_at, is_active, role
 FROM users
 WHERE id = $1
 `
@@ -215,12 +248,13 @@ func (q *Queries) GetUserByID(ctx context.Context, id int32) (User, error) {
 		&i.BonusPoints,
 		&i.CreatedAt,
 		&i.IsActive,
+		&i.Role,
 	)
 	return i, err
 }
 
 const getUserByPhone = `-- name: GetUserByPhone :one
-SELECT id, name, phone, email, password_hash, bonus_points, created_at, is_active
+SELECT id, name, phone, email, password_hash, bonus_points, created_at, is_active, role
 FROM users
 WHERE phone = $1
 `
@@ -237,6 +271,7 @@ func (q *Queries) GetUserByPhone(ctx context.Context, phone string) (User, error
 		&i.BonusPoints,
 		&i.CreatedAt,
 		&i.IsActive,
+		&i.Role,
 	)
 	return i, err
 }
@@ -267,7 +302,7 @@ SET
     bonus_points = $6,
     is_active = $7
 WHERE id = $1
-RETURNING id, name, phone, email, password_hash, bonus_points, created_at, is_active
+RETURNING id, name, phone, email, password_hash, bonus_points, created_at, is_active, role
 `
 
 type UpdateUserParams struct {
@@ -300,6 +335,7 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		&i.BonusPoints,
 		&i.CreatedAt,
 		&i.IsActive,
+		&i.Role,
 	)
 	return i, err
 }
@@ -309,7 +345,7 @@ UPDATE users
 SET
     bonus_points = $2
 WHERE id = $1
-RETURNING id, name, phone, email, password_hash, bonus_points, created_at, is_active
+RETURNING id, name, phone, email, password_hash, bonus_points, created_at, is_active, role
 `
 
 type UpdateUserBonusPointsParams struct {
@@ -329,6 +365,36 @@ func (q *Queries) UpdateUserBonusPoints(ctx context.Context, arg UpdateUserBonus
 		&i.BonusPoints,
 		&i.CreatedAt,
 		&i.IsActive,
+		&i.Role,
+	)
+	return i, err
+}
+
+const updateUserRole = `-- name: UpdateUserRole :one
+UPDATE users
+SET role = $2
+WHERE id = $1
+RETURNING id, name, phone, email, password_hash, bonus_points, created_at, is_active, role
+`
+
+type UpdateUserRoleParams struct {
+	ID   int32  `json:"id"`
+	Role string `json:"role"`
+}
+
+func (q *Queries) UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, updateUserRole, arg.ID, arg.Role)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Phone,
+		&i.Email,
+		&i.PasswordHash,
+		&i.BonusPoints,
+		&i.CreatedAt,
+		&i.IsActive,
+		&i.Role,
 	)
 	return i, err
 }

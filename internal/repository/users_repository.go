@@ -120,3 +120,13 @@ func (r *UsersRepository) UpdateUserBonusPoints(ctx context.Context, arg db.Upda
 	}
 	return element, nil
 }
+func (r *UsersRepository) GetUserByEmailForAuth(ctx context.Context, email string) (db.GetUserByEmailForAuthRow, error) {
+	row, err := r.queries.GetUserByEmailForAuth(ctx, email)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return db.GetUserByEmailForAuthRow{}, fmt.Errorf("user %s not found: %w", email, sql.ErrNoRows)
+		}
+		return db.GetUserByEmailForAuthRow{}, fmt.Errorf("GetUserByEmailForAuth: %w", err)
+	}
+	return row, nil
+}

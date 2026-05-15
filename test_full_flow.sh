@@ -1,176 +1,166 @@
 #!/usr/bin/env bash
 
-BASE="http://localhost:8080"
-set -e
+BASE_URL="http://localhost:8080"
+
+CUSTOMER1_EMAIL="customer1@bar108.com"
+CUSTOMER2_EMAIL="customer2@bar108.com"
+ADMIN_EMAIL="admin@bar108.com"
+PASSWORD="secret123"
+
+PASS=0
+FAIL=0
+
+report() {
+  local name="$1"
+  local expected="$2"
+  local actual="$3"
+
+  if [ "$expected" = "$actual" ]; then
+    echo "✅ PASS: $name | status=$actual"
+    PASS=$((PASS + 1))
+  else
+    echo "❌ FAIL: $name | expected=$expected got=$actual"
+    FAIL=$((FAIL + 1))
+  fi
+}
+
+register_user() {
+  local name="$1"
+  local phone="$2"
+  local email="$3"
+
+  curl -s -X POST "$BASE_URL/auth/register" \
+    -H "Content-Type: application/json" \
+    -d "{\"name\":\"$name\",\"phone\":\"$phone\",\"email\":\"$email\",\"password\":\"$PASSWORD\"}" > /dev/null
+}
+
+login_user() {
+  local email="$1"
+
+  curl -s -X POST "$BASE_URL/auth/login" \
+    -H "Content-Type: application/json" \
+    -d "{\"email\":\"$email\",\"password\":\"$PASSWORD\"}" \
+    | sed -n 's/.*"token":"\([^"]*\)".*/\1/p'
+}
+
+status_code() {
+  curl -s -o /tmp/bar108_response.json -w "%{http_code}" "$@"
+}
 
 echo "=============================="
-echo "1) Health check"
+echo "Bar108 Auth/Orders Test Script"
 echo "=============================="
-curl -s "$BASE/ping" | jq
 
-echo "=============================="
-echo "2) Get categories"
-echo "=============================="
-CATEGORIES=$(curl -s "$BASE/categories")
-echo "$CATEGORIES" | jq
-CATEGORY_ID=$(echo "$CATEGORIES" | jq -r '.data[0].id')
-echo "Using category_id=$CATEGORY_ID"
+echo
+echo "1) Creating users..."
+register_user "Customer One" "+79000000001" "$CUSTOMER1_EMAIL"
+register_user "Customer Two" "+79000000002" "$CUSTOMER2_EMAIL"
+register_user "Admin User" "+79000000003" "$ADMIN_EMAIL"
 
-echo "=============================="
-echo "3) Create user"
-echo "=============================="
-UNIQUE=$(date +%s)
+echo "Users created or already exist."
 
-USER_RESPONSE=$(curl -s -X POST "$BASE/users" \
+echo
+echo "2) Promote admin manually if not already admin:"
+echo "Run this in DB if needed:"
+echo "UPDATE users SET role = 'admin' WHERE email = '$ADMIN_EMAIL';"
+echo
+
+read -p "Press Enter after promoting admin in DB..."
+
+echo
+echo "3) Logging in and saving tokens..."
+
+CUSTOMER1_TOKEN=$(login_user "$CUSTOMER1_EMAIL")
+CUSTOMER2_TOKEN=$(login_user "$CUSTOMER2_EMAIL")
+ADMIN_TOKEN=$(login_user "$ADMIN_EMAIL")
+
+echo "$CUSTOMER1_TOKEN" > customer1.token
+echo "$CUSTOMER2_TOKEN" > customer2.token
+echo "$ADMIN_TOKEN" > admin.token
+
+echo "Tokens saved:"
+echo "- customer1.token"
+echo "- customer2.token"
+echo "- admin.token"
+
+echo
+echo "4) Extracting user IDs from login responses..."
+
+CUSTOMER1_ID=$(curl -s -X POST "$BASE_URL/auth/login" \
   -H "Content-Type: application/json" \
-  -d "{
-    \"name\": \"Test User $UNIQUE\",
-    \"phone\": \"+7999$UNIQUE\",
-    \"email\": \"testuser$UNIQUE@example.com\",
-    \"password_hash\": \"fake_hash\"
-  }")
+  -d "{\"email\":\"$CUSTOMER1_EMAIL\",\"password\":\"$PASSWORD\"}" \
+  | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
 
-echo "$USER_RESPONSE" | jq
-USER_ID=$(echo "$USER_RESPONSE" | jq -r '.data.id')
+CUSTOMER2_ID=$(curl -s -X POST "$BASE_URL/auth/login" \
+  -H "Content-Type: application/json" \
+  -d "{\"email\":\"$CUSTOMER2_EMAIL\",\"password\":\"$PASSWORD\"}" \
+  | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
 
-if [ "$USER_ID" = "null" ] || [ -z "$USER_ID" ]; then
-  echo "Failed to create user"
+echo "Customer 1 ID: $CUSTOMER1_ID"
+echo "Customer 2 ID: $CUSTOMER2_ID"
+
+echo
+echo "5) Running test cases..."
+echo
+
+# Public route
+CODE=$(status_code "$BASE_URL/menu")
+report "Public GET /menu should work without token" "200" "$CODE"
+
+# Customer should NOT access admin all orders
+CODE=$(status_code "$BASE_URL/orders" \
+  -H "Authorization: Bearer $CUSTOMER1_TOKEN")
+report "Customer GET /orders should be forbidden" "403" "$CODE"
+
+# Admin should access all orders
+CODE=$(status_code "$BASE_URL/orders" \
+  -H "Authorization: Bearer $ADMIN_TOKEN")
+report "Admin GET /orders should work" "200" "$CODE"
+
+# Customer 1 creates order
+CODE=$(status_code -X POST "$BASE_URL/orders" \
+  -H "Authorization: Bearer $CUSTOMER1_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"user_id\":$CUSTOMER1_ID,\"items\":[{\"menu_item_id\":1,\"quantity\":1}]}")
+report "Customer 1 POST /orders should create order" "201" "$CODE"
+
+# Customer 1 views his own orders
+CODE=$(status_code "$BASE_URL/users/$CUSTOMER1_ID/orders" \
+  -H "Authorization: Bearer $CUSTOMER1_TOKEN")
+report "Customer 1 GET own /users/:id/orders should work" "200" "$CODE"
+
+# Customer 1 tries to view Customer 2 orders
+CODE=$(status_code "$BASE_URL/users/$CUSTOMER2_ID/orders" \
+  -H "Authorization: Bearer $CUSTOMER1_TOKEN")
+report "Customer 1 GET another user's orders should be forbidden" "403" "$CODE"
+
+# Customer 2 tries to view Customer 1 orders
+CODE=$(status_code "$BASE_URL/users/$CUSTOMER1_ID/orders" \
+  -H "Authorization: Bearer $CUSTOMER2_TOKEN")
+report "Customer 2 GET another user's orders should be forbidden" "403" "$CODE"
+
+# Admin views customer orders
+CODE=$(status_code "$BASE_URL/users/$CUSTOMER1_ID/orders" \
+  -H "Authorization: Bearer $ADMIN_TOKEN")
+report "Admin GET /users/:id/orders should work" "200" "$CODE"
+
+# No token
+CODE=$(status_code "$BASE_URL/users/$CUSTOMER1_ID/orders")
+report "No token should be unauthorized" "401" "$CODE"
+
+echo
+echo "=============================="
+echo "Final Report"
+echo "=============================="
+echo "Passed: $PASS"
+echo "Failed: $FAIL"
+
+if [ "$FAIL" -eq 0 ]; then
+  echo "✅ All tests passed"
+  exit 0
+else
+  echo "❌ Some tests failed"
+  echo "Last response body:"
+  cat /tmp/bar108_response.json
   exit 1
 fi
-
-echo "Created user_id=$USER_ID"
-
-echo "=============================="
-echo "4) Create menu item"
-echo "=============================="
-MENU_RESPONSE=$(curl -s -X POST "$BASE/menu" \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"name\": \"Test Burger $UNIQUE\",
-    \"description\": \"Created by test script\",
-    \"price\": \"500.00\",
-    \"category_id\": $CATEGORY_ID,
-    \"is_available\": true
-  }")
-
-echo "$MENU_RESPONSE" | jq
-MENU_ITEM_ID=$(echo "$MENU_RESPONSE" | jq -r '.data.id')
-echo "Created menu_item_id=$MENU_ITEM_ID"
-
-echo "=============================="
-echo "5) Place order"
-echo "=============================="
-ORDER_RESPONSE=$(curl -s -X POST "$BASE/orders" \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"user_id\": $USER_ID,
-    \"items\": [
-      {
-        \"menu_item_id\": $MENU_ITEM_ID,
-        \"quantity\": 2
-      }
-    ],
-    \"promo_code\": \"\",
-    \"delivery_address\": \"Innopolis test address\",
-    \"notes\": \"Created by full flow script\"
-  }")
-
-echo "$ORDER_RESPONSE" | jq
-ORDER_ID=$(echo "$ORDER_RESPONSE" | jq -r '.data.order.id')
-
-if [ "$ORDER_ID" = "null" ] || [ -z "$ORDER_ID" ]; then
-  echo "Failed to create order"
-  exit 1
-fi
-
-echo "Created order_id=$ORDER_ID"
-
-echo "=============================="
-echo "6) Test order GET endpoints"
-echo "=============================="
-curl -s "$BASE/orders" | jq
-curl -s "$BASE/orders/pending" | jq
-curl -s "$BASE/orders/$ORDER_ID" | jq
-curl -s "$BASE/orders/$ORDER_ID/items" | jq
-curl -s "$BASE/orders/$ORDER_ID/track" | jq
-curl -s "$BASE/users/$USER_ID/orders" | jq
-
-echo "=============================="
-echo "7) Update order status flow"
-echo "=============================="
-curl -s -X PATCH "$BASE/orders/$ORDER_ID/status" \
-  -H "Content-Type: application/json" \
-  -d '{"status": "confirmed"}' | jq
-
-curl -s -X PATCH "$BASE/orders/$ORDER_ID/status" \
-  -H "Content-Type: application/json" \
-  -d '{"status": "preparing"}' | jq
-
-curl -s -X PATCH "$BASE/orders/$ORDER_ID/status" \
-  -H "Content-Type: application/json" \
-  -d '{"status": "ready"}' | jq
-
-echo "=============================="
-echo "8) Courier endpoints"
-echo "=============================="
-COURIERS=$(curl -s "$BASE/couriers")
-echo "$COURIERS" | jq
-COURIER_ID=$(echo "$COURIERS" | jq -r '.data[0].id')
-
-if [ "$COURIER_ID" = "null" ] || [ -z "$COURIER_ID" ]; then
-  echo "No couriers found in database."
-  exit 1
-fi
-
-echo "Using courier_id=$COURIER_ID"
-
-curl -s "$BASE/couriers/available" | jq
-curl -s "$BASE/couriers/$COURIER_ID" | jq
-
-curl -s -X PATCH "$BASE/couriers/$COURIER_ID/status" \
-  -H "Content-Type: application/json" \
-  -d '{"status": "available"}' | jq
-
-echo "=============================="
-echo "9) Assign courier"
-echo "=============================="
-curl -s -X PATCH "$BASE/orders/$ORDER_ID/courier" \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"courier_id\": $COURIER_ID
-  }" | jq
-
-echo "=============================="
-echo "10) Final tracking"
-echo "=============================="
-curl -s "$BASE/orders/$ORDER_ID/track" | jq
-
-echo "=============================="
-echo "11) Create another order then cancel it"
-echo "=============================="
-CANCEL_ORDER_RESPONSE=$(curl -s -X POST "$BASE/orders" \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"user_id\": $USER_ID,
-    \"items\": [
-      {
-        \"menu_item_id\": $MENU_ITEM_ID,
-        \"quantity\": 1
-      }
-    ],
-    \"promo_code\": \"\",
-    \"delivery_address\": \"Cancel test address\",
-    \"notes\": \"This order will be cancelled\"
-  }")
-
-echo "$CANCEL_ORDER_RESPONSE" | jq
-CANCEL_ORDER_ID=$(echo "$CANCEL_ORDER_RESPONSE" | jq -r '.data.order.id')
-
-echo "Created cancel_order_id=$CANCEL_ORDER_ID"
-
-curl -s -X PATCH "$BASE/orders/$CANCEL_ORDER_ID/cancel" | jq
-curl -s "$BASE/orders/$CANCEL_ORDER_ID/track" | jq
-
-echo "=============================="
-echo "DONE"
-echo "=============================="

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bar108/internal/apperror"
+	"bar108/internal/middleware"
 	"bar108/internal/repository"
 	"net/http"
 
@@ -162,13 +163,44 @@ func (h *OrderHandler) GetPendingOrders(c *gin.Context) {
 
 // GetOrdersByUserID handles GET /users/:id/orders.
 // Returns all orders for a specific user — their order history.
+// func (h *OrderHandler) GetOrdersByUserID(c *gin.Context) {
+// 	userID, ok := parseID(c)
+// 	if !ok {
+// 		return
+// 	}
+
+// 	orders, err := h.service.GetOrdersByUserID(c.Request.Context(), userID)
+// 	if err != nil {
+// 		apperror.Respond(c, err)
+// 		return
+// 	}
+
+//		c.JSON(http.StatusOK, gin.H{"data": orders})
+//	}
 func (h *OrderHandler) GetOrdersByUserID(c *gin.Context) {
-	userID, ok := parseID(c)
+	requestedUserID, ok := parseID(c)
 	if !ok {
 		return
 	}
 
-	orders, err := h.service.GetOrdersByUserID(c.Request.Context(), userID)
+	currentUserID, ok := middleware.GetUserID(c)
+	if !ok {
+		apperror.Respond(c, apperror.ErrUnauthorized)
+		return
+	}
+
+	role, ok := middleware.GetRole(c)
+	if !ok {
+		apperror.Respond(c, apperror.ErrUnauthorized)
+		return
+	}
+
+	if role != "admin" && requestedUserID != currentUserID {
+		apperror.Respond(c, apperror.ErrForbidden)
+		return
+	}
+
+	orders, err := h.service.GetOrdersByUserID(c.Request.Context(), requestedUserID)
 	if err != nil {
 		apperror.Respond(c, err)
 		return

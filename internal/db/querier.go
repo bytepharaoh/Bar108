@@ -64,6 +64,7 @@ type Querier interface {
 	// to validate and calculate the discount.
 	GetPromotionByCode(ctx context.Context, code string) (Promotion, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
+	GetUserByEmailForAuth(ctx context.Context, email string) (GetUserByEmailForAuthRow, error)
 	GetUserByID(ctx context.Context, id int32) (User, error)
 	GetUserByPhone(ctx context.Context, phone string) (User, error)
 	HasActiveOrdersByUserID(ctx context.Context, userID int32) (bool, error)
@@ -77,6 +78,7 @@ type Querier interface {
 	UpdateOrderStatus(ctx context.Context, arg UpdateOrderStatusParams) (Order, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
 	UpdateUserBonusPoints(ctx context.Context, arg UpdateUserBonusPointsParams) (User, error)
+	UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) (User, error)
 }
 
 var _ Querier = (*Queries)(nil)

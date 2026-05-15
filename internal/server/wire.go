@@ -2,6 +2,7 @@ package server
 
 import (
 	"bar108/internal/handlers"
+	jwtpkg "bar108/internal/jwt"
 	"bar108/internal/repository"
 	"bar108/internal/services"
 	"database/sql"
@@ -22,6 +23,7 @@ func newMenuService(repo *repository.MenuRepository) services.MenuService {
 func newUserService(repo *repository.UsersRepository) services.UserService {
 	return services.NewUserService(repo)
 }
+
 func newOrderRepository(db *sql.DB) repository.OrderRepository {
 	return repository.NewOrderRepository(db)
 }
@@ -32,4 +34,12 @@ func newOrderService(repo repository.OrderRepository) services.OrderService {
 
 func newOrderHandler(svc services.OrderService) *handlers.OrderHandler {
 	return handlers.NewOrderHandler(svc)
+}
+
+func newAuthService(store *repository.UsersRepository, jwtManager *jwtpkg.Manager) services.AuthService {
+	return services.NewAuthService(store, jwtManager)
+}
+
+func newAuthHandler(svc services.AuthService) *handlers.AuthHandler {
+	return handlers.NewAuthHandler(svc)
 }

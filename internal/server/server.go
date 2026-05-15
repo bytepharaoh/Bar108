@@ -3,14 +3,15 @@ package server
 import (
 	"bar108/config"
 	"bar108/internal/handlers"
+	jwtpkg "bar108/internal/jwt"
+	"bar108/internal/middleware"
 	"context"
 	"database/sql"
+	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
-
-	"log"
-	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -21,18 +22,19 @@ type Server struct {
 	router     *gin.Engine
 }
 
-func New(cfg *config.Config, db *sql.DB) *Server {
+func New(cfg *config.Config, db *sql.DB, jwtManager *jwtpkg.Manager) *Server {
 	if cfg.AppEnv == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	}
+
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(gin.Logger())
-	// Trust only localhost proxy — fixes the Gin warning you saw.
-	// In production you'd set this to your load balancer's IP.
+
 	if err := router.SetTrustedProxies([]string{"127.0.0.1"}); err != nil {
 		log.Fatalf("server: failed to set trusted proxies: %v", err)
 	}
+
 	s := &Server{
 		router: router,
 		httpServer: &http.Server{
@@ -43,96 +45,99 @@ func New(cfg *config.Config, db *sql.DB) *Server {
 			IdleTimeout:  60 * time.Second,
 		},
 	}
-	s.setupRoutes(db)
+
+	// Pass jwtManager into setupRoutes
+	s.setupRoutes(db, jwtManager)
 	return s
 }
 
-// setupRoutes creates all layers (repo → service → handler)
-
-func (s *Server) setupRoutes(db *sql.DB) {
+func (s *Server) setupRoutes(db *sql.DB, jwtManager *jwtpkg.Manager) {
 	menuRepo := newMenuRepository(db)
 	userRepo := newUserRepository(db)
+	orderRepo := newOrderRepository(db)
+
 	menuSvc := newMenuService(menuRepo)
 	userSvc := newUserService(userRepo)
+	orderSvc := newOrderService(orderRepo)
+	authSvc := newAuthService(userRepo, jwtManager)
+
 	menuHandler := handlers.NewMenuHandler(menuSvc)
 	userHandler := handlers.NewUserHandler(userSvc)
-	s.router.GET("/ping", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"status":  "ok",
-			"message": "pong",
-		})
-	})
-	menu := s.router.Group("/menu")
-	{
-		menu.GET("", menuHandler.GetAllMenuItems)
-		menu.GET("/:id", menuHandler.GetMenuItemByID)
-		menu.POST("", menuHandler.CreateMenuItem)
-		menu.PUT("/:id", menuHandler.UpdateMenuItem)
-		menu.DELETE("/:id", menuHandler.DeleteMenuItem)
-	}
-	s.router.GET("/categories", menuHandler.GetAllCategories)
-	// User routes
-	users := s.router.Group("/users")
-	{
-		users.GET("", userHandler.GetAllUsers)
-		users.GET("/active", userHandler.GetActiveUsers)
-		users.GET("/:id", userHandler.GetUserByID)
-		users.POST("", userHandler.CreateUser)
-		users.PUT("/:id", userHandler.UpdateUser)
-		users.PATCH("/:id/bonus", userHandler.UpdateUserBonusPoints)
-		users.PATCH("/:id/activate", userHandler.ActivateUser)
-		users.PATCH("/:id/deactivate", userHandler.DeactivateUser)
-	}
-
-	orderRepo := newOrderRepository(db)
-	orderSvc := newOrderService(orderRepo)
 	orderHandler := newOrderHandler(orderSvc)
-	// Order routes
-	orders := s.router.Group("/orders")
-	{
-		orders.POST("", orderHandler.PlaceOrder)
-		orders.GET("", orderHandler.GetAllOrders)
-		orders.GET("/pending", orderHandler.GetPendingOrders)
-		orders.GET("/:id", orderHandler.GetOrderByID)
-		orders.GET("/:id/track", orderHandler.GetOrderStatusHistory)
-		orders.GET("/:id/items", orderHandler.GetOrderItems)
-		orders.PATCH("/:id/status", orderHandler.UpdateOrderStatus)
-		orders.PATCH("/:id/cancel", orderHandler.CancelOrder)
-		orders.PATCH("/:id/courier", orderHandler.AssignCourier)
-	}
+	authHandler := newAuthHandler(authSvc)
 
-	// User orders
-	s.router.GET("/users/:id/orders", orderHandler.GetOrdersByUserID)
-	// Courier routes
-	couriers := s.router.Group("/couriers")
-	{
-		couriers.GET("", orderHandler.GetAllCouriers)
-		couriers.GET("/available", orderHandler.GetAvailableCouriers)
-		couriers.GET("/:id", orderHandler.GetCourierByID)
-		couriers.PATCH("/:id/status", orderHandler.UpdateCourierStatus)
-	}
+	// Health check — always public
+	s.router.GET("/ping", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "pong"})
+	})
 
+	// ── Public routes (no auth) ──────────────────────────
+	s.router.GET("/menu", menuHandler.GetAllMenuItems)
+	s.router.GET("/menu/:id", menuHandler.GetMenuItemByID)
+	s.router.GET("/categories", menuHandler.GetAllCategories)
+
+	s.router.POST("/auth/register", authHandler.Register)
+	s.router.POST("/auth/login", authHandler.Login)
+
+	// ── Authenticated routes ─────────────────────────────
+	authed := s.router.Group("")
+	authed.Use(middleware.AuthMiddleware(jwtManager))
+	{
+		// Any logged-in user
+		authed.POST("/orders", orderHandler.PlaceOrder)
+		authed.GET("/orders/:id", orderHandler.GetOrderByID)
+		authed.GET("/orders/:id/track", orderHandler.GetOrderStatusHistory)
+		authed.GET("/orders/:id/items", orderHandler.GetOrderItems)
+		authed.PATCH("/orders/:id/cancel", orderHandler.CancelOrder)
+		authed.GET("/users/:id/orders", orderHandler.GetOrdersByUserID)
+		authed.GET("/users/:id", userHandler.GetUserByID)
+		authed.PUT("/users/:id", userHandler.UpdateUser)
+		authed.PATCH("/users/:id/bonus", userHandler.UpdateUserBonusPoints)
+
+		// ── Admin only ───────────────────────────────────
+		admin := authed.Group("")
+		admin.Use(middleware.AdminMiddleware())
+		{
+			admin.GET("/orders", orderHandler.GetAllOrders)
+			admin.GET("/orders/pending", orderHandler.GetPendingOrders)
+			admin.PATCH("/orders/:id/status", orderHandler.UpdateOrderStatus)
+			admin.PATCH("/orders/:id/courier", orderHandler.AssignCourier)
+
+			admin.POST("/menu", menuHandler.CreateMenuItem)
+			admin.PUT("/menu/:id", menuHandler.UpdateMenuItem)
+			admin.DELETE("/menu/:id", menuHandler.DeleteMenuItem)
+
+			admin.GET("/users", userHandler.GetAllUsers)
+			admin.GET("/users/active", userHandler.GetActiveUsers)
+			admin.PATCH("/users/:id/activate", userHandler.ActivateUser)
+			admin.PATCH("/users/:id/deactivate", userHandler.DeactivateUser)
+
+			admin.GET("/couriers", orderHandler.GetAllCouriers)
+			admin.GET("/couriers/available", orderHandler.GetAvailableCouriers)
+			admin.GET("/couriers/:id", orderHandler.GetCourierByID)
+			admin.PATCH("/couriers/:id/status", orderHandler.UpdateCourierStatus)
+		}
+	}
 }
+
 func (s *Server) Run() {
 	go func() {
 		log.Printf("server: listening on %s", s.httpServer.Addr)
 		if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("server: failed to start: %v", err)
 		}
-
 	}()
+
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
+
 	log.Println("server: shutting down gracefully...")
-	// Give active requests 5 seconds to finish.
-	// After 5 seconds, any remaining connections are forcefully closed.
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
 	if err := s.httpServer.Shutdown(ctx); err != nil {
 		log.Printf("server: forced shutdown: %v", err)
-
 	}
 	log.Println("server: stopped")
-
 }

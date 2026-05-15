@@ -3,18 +3,15 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 )
-
-// Config holds all configuration values for the app.
-// We read these from environment variables (loaded from .env).
 
 type Config struct {
 	AppPort string
 	AppEnv  string
 	DB      DBConfig
+	JWT     JWTConfig
 }
-
-// DBConfig holds everything needed to connect to PostgreSQL.
 
 type DBConfig struct {
 	Host     string
@@ -25,10 +22,18 @@ type DBConfig struct {
 	SSLMode  string
 }
 
-// Load reads environment variables and returns a Config struct.
-// If any required variable is missing, it returns an error.
+// JWTConfig holds everything needed to sign and verify tokens.
+type JWTConfig struct {
+	Secret      string // the secret key — NEVER expose this
+	ExpiryHours int    // how many hours until token expires
+}
 
 func Load() (*Config, error) {
+	expiryHours, err := strconv.Atoi(getEnv("JWT_EXPIRY_HOURS", "24"))
+	if err != nil {
+		expiryHours = 24
+	}
+
 	cfg := &Config{
 		AppPort: getEnv("APP_PORT", "8080"),
 		AppEnv:  getEnv("APP_ENV", "development"),
@@ -40,8 +45,12 @@ func Load() (*Config, error) {
 			Name:     getEnv("DB_NAME", ""),
 			SSLMode:  getEnv("DB_SSLMODE", "disable"),
 		},
+		JWT: JWTConfig{
+			Secret:      getEnv("JWT_SECRET", ""),
+			ExpiryHours: expiryHours,
+		},
 	}
-	//validate all required fields
+
 	if cfg.DB.User == "" {
 		return nil, fmt.Errorf("DB_USER is required")
 	}
@@ -51,13 +60,13 @@ func Load() (*Config, error) {
 	if cfg.DB.Name == "" {
 		return nil, fmt.Errorf("DB_NAME is required")
 	}
+	if cfg.JWT.Secret == "" {
+		return nil, fmt.Errorf("JWT_SECRET is required")
+	}
+
 	return cfg, nil
 }
 
-// DSN builds the PostgreSQL connection string from the config.
-// Example: "host=localhost port=5432 user=bar108_user ..."
-// getEnv reads an environment variable and returns a fallback
-// value if it's not set. This prevents panics on missing vars.
 func getEnv(key, fallback string) string {
 	if value, ok := os.LookupEnv(key); ok {
 		return value

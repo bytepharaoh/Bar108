@@ -74,3 +74,13 @@ UPDATE users
 SET is_active = true
 WHERE id = $1
 RETURNING *;
+-- name: GetUserByEmailForAuth :one
+SELECT id, email, password_hash, role, is_active
+FROM users
+WHERE email = $1;
+
+-- name: UpdateUserRole :one
+UPDATE users
+SET role = $2
+WHERE id = $1
+RETURNING *;
