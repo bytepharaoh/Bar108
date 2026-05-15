@@ -257,13 +257,34 @@ func (h *OrderHandler) CancelOrder(c *gin.Context) {
 		return
 	}
 
-	order, err := h.service.CancelOrder(c.Request.Context(), id)
+	currentUserID, ok := middleware.GetUserID(c)
+	if !ok {
+		apperror.Respond(c, apperror.ErrUnauthorized)
+		return
+	}
+
+	role, _ := middleware.GetRole(c)
+
+	// Fetch the order first to verify ownership
+	order, err := h.service.GetOrderByID(c.Request.Context(), id)
 	if err != nil {
 		apperror.Respond(c, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": order})
+	// Customers can only cancel their own orders
+	if role != "admin" && order.UserID != currentUserID {
+		apperror.Respond(c, apperror.ErrForbidden)
+		return
+	}
+
+	cancelled, err := h.service.CancelOrder(c.Request.Context(), id)
+	if err != nil {
+		apperror.Respond(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": cancelled})
 }
 
 // AssignCourier handles PATCH /orders/:id/courier — admin only.

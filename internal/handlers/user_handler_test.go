@@ -5,89 +5,75 @@ import (
 	"bar108/internal/db"
 	"bar108/internal/handlers"
 	"bar108/internal/services/mocks"
-	"bytes"
-	"encoding/json"
 	"errors"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/mock/gomock"
 )
 
-// doRequest is a shared helper that fires an HTTP request
-// against the test router and returns the recorded response.
-// Using httptest.NewRecorder() means no real server is needed —
-// everything runs in memory.
-func doRequest(r *gin.Engine, method, url string, body interface{}) *httptest.ResponseRecorder {
-	var buf bytes.Buffer
-	if body != nil {
-		_ = json.NewEncoder(&buf).Encode(body)
-	}
-	req := httptest.NewRequest(method, url, &buf)
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	return w
-}
-
-// setupMenuHandler creates a fresh mock + handler + router for each test.
-// gin.TestMode suppresses debug output during tests.
-func setupMenuHandler(t *testing.T) (*gin.Engine, *mocks.MockMenuService) {
+func setupUserHandler(t *testing.T) (*gin.Engine, *mocks.MockUserService) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	ctrl := gomock.NewController(t)
-	mockSvc := mocks.NewMockMenuService(ctrl)
-	h := handlers.NewMenuHandler(mockSvc)
+	mockSvc := mocks.NewMockUserService(ctrl)
+	h := handlers.NewUserHandler(mockSvc)
 
 	r := gin.New()
-	r.GET("/menu", h.GetAllMenuItems)
-	r.GET("/menu/:id", h.GetMenuItemByID)
-	r.GET("/categories", h.GetAllCategories)
-	r.POST("/menu", h.CreateMenuItem)
-	r.PUT("/menu/:id", h.UpdateMenuItem)
-	r.DELETE("/menu/:id", h.DeleteMenuItem)
+	r.Use(func(c *gin.Context) {
+
+		c.Set("user_id", int32(1))
+		c.Set("role", "admin")
+		c.Next()
+	})
+
+	r.GET("/users", h.GetAllUsers)
+	r.GET("/users/active", h.GetActiveUsers)
+	r.GET("/users/:id", h.GetUserByID)
+	r.POST("/users", h.CreateUser)
+	r.PUT("/users/:id", h.UpdateUser)
+	r.PATCH("/users/:id/bonus", h.UpdateUserBonusPoints)
+	r.PATCH("/users/:id/activate", h.ActivateUser)
+	r.PATCH("/users/:id/deactivate", h.DeactivateUser)
 
 	return r, mockSvc
 }
 
 // =============================================
-// GET /menu
+// GET /users
 // =============================================
 
-func TestMenuHandler_GetAllMenuItems(t *testing.T) {
+func TestUserHandler_GetAllUsers(t *testing.T) {
 	tests := []struct {
 		name       string
-		setupMock  func(m *mocks.MockMenuService)
+		setupMock  func(m *mocks.MockUserService)
 		wantStatus int
 	}{
 		{
-			name: "happy path — returns items",
-			setupMock: func(m *mocks.MockMenuService) {
+			name: "happy path — returns users",
+			setupMock: func(m *mocks.MockUserService) {
 				m.EXPECT().
-					GetAllMenuItems(gomock.Any()).
-					Return([]db.GetAllMenuItemsRow{
-						{ID: 1, Name: "Classic Burger"},
-					}, nil)
+					GetAllUsers(gomock.Any()).
+					Return([]db.User{{ID: 1, Name: "Ahmed"}}, nil)
 			},
 			wantStatus: http.StatusOK,
 		},
 		{
-			name: "empty menu — still 200",
-			setupMock: func(m *mocks.MockMenuService) {
+			name: "empty list — still 200",
+			setupMock: func(m *mocks.MockUserService) {
 				m.EXPECT().
-					GetAllMenuItems(gomock.Any()).
-					Return([]db.GetAllMenuItemsRow{}, nil)
+					GetAllUsers(gomock.Any()).
+					Return([]db.User{}, nil)
 			},
 			wantStatus: http.StatusOK,
 		},
 		{
 			name: "service error — 500",
-			setupMock: func(m *mocks.MockMenuService) {
+			setupMock: func(m *mocks.MockUserService) {
 				m.EXPECT().
-					GetAllMenuItems(gomock.Any()).
-					Return(nil, errors.New("db down"))
+					GetAllUsers(gomock.Any()).
+					Return(nil, errors.New("db error"))
 			},
 			wantStatus: http.StatusInternalServerError,
 		},
@@ -95,10 +81,10 @@ func TestMenuHandler_GetAllMenuItems(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r, mockSvc := setupMenuHandler(t)
+			r, mockSvc := setupUserHandler(t)
 			tt.setupMock(mockSvc)
 
-			w := doRequest(r, http.MethodGet, "/menu", nil)
+			w := doRequest(r, http.MethodGet, "/users", nil)
 
 			if w.Code != tt.wantStatus {
 				t.Errorf("got status %d, want %d — body: %s",
@@ -109,146 +95,130 @@ func TestMenuHandler_GetAllMenuItems(t *testing.T) {
 }
 
 // =============================================
-// GET /menu/:id
+// GET /users/:id
 // =============================================
 
-func TestMenuHandler_GetMenuItemByID(t *testing.T) {
+func TestUserHandler_GetUserByID(t *testing.T) {
+
 	tests := []struct {
 		name       string
 		url        string
-		setupMock  func(m *mocks.MockMenuService)
+		setupMock  func(m *mocks.MockUserService)
 		wantStatus int
 	}{
 		{
 			name: "happy path",
-			url:  "/menu/1",
-			setupMock: func(m *mocks.MockMenuService) {
+			url:  "/users/1",
+			setupMock: func(m *mocks.MockUserService) {
 				m.EXPECT().
-					GetMenuItemByID(gomock.Any(), int32(1)).
-					Return(db.GetMenuItemByIDRow{ID: 1, Name: "Classic Burger"}, nil)
+					GetUserByID(gomock.Any(), int32(1)).
+					Return(db.User{
+						ID:   1,
+						Name: "Ahmed",
+					}, nil)
 			},
 			wantStatus: http.StatusOK,
 		},
 		{
 			name: "not found — 404",
-			url:  "/menu/999",
-			setupMock: func(m *mocks.MockMenuService) {
+			url:  "/users/999",
+			setupMock: func(m *mocks.MockUserService) {
 				m.EXPECT().
-					GetMenuItemByID(gomock.Any(), int32(999)).
-					Return(db.GetMenuItemByIDRow{}, apperror.ErrMenuNotFound)
+					GetUserByID(gomock.Any(), int32(999)).
+					Return(db.User{}, apperror.ErrUserNotFound)
 			},
 			wantStatus: http.StatusNotFound,
 		},
 		{
-			// String ID can't be parsed — parseID returns 400.
-			// Service must never be called.
-			// gomock enforces this: no EXPECT = fail if called.
-			name:       "invalid id — string",
-			url:        "/menu/abc",
-			setupMock:  func(m *mocks.MockMenuService) {},
+			name:       "invalid id string — 400",
+			url:        "/users/abc",
+			setupMock:  func(m *mocks.MockUserService) {},
 			wantStatus: http.StatusBadRequest,
-		},
-		{
-			name: "invalid id — zero from service",
-			url:  "/menu/0",
-			setupMock: func(m *mocks.MockMenuService) {
-				m.EXPECT().
-					GetMenuItemByID(gomock.Any(), int32(0)).
-					Return(db.GetMenuItemByIDRow{}, apperror.ErrInvalidID)
-			},
-			wantStatus: http.StatusBadRequest,
-		},
-		{
-			name: "database error — 500",
-			url:  "/menu/1",
-			setupMock: func(m *mocks.MockMenuService) {
-				m.EXPECT().
-					GetMenuItemByID(gomock.Any(), int32(1)).
-					Return(db.GetMenuItemByIDRow{}, errors.New("timeout"))
-			},
-			wantStatus: http.StatusInternalServerError,
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r, mockSvc := setupMenuHandler(t)
+			r, mockSvc := setupUserHandler(t)
 			tt.setupMock(mockSvc)
-
 			w := doRequest(r, http.MethodGet, tt.url, nil)
-
 			if w.Code != tt.wantStatus {
-				t.Errorf("got status %d, want %d — body: %s",
-					w.Code, tt.wantStatus, w.Body.String())
+				t.Errorf(
+					"got status %d, want %d — body: %s",
+					w.Code,
+					tt.wantStatus,
+					w.Body.String(),
+				)
 			}
 		})
 	}
+
 }
 
 // =============================================
-// POST /menu
+// POST /users
 // =============================================
 
-func TestMenuHandler_CreateMenuItem(t *testing.T) {
+func TestUserHandler_CreateUser(t *testing.T) {
 	tests := []struct {
 		name       string
 		body       interface{}
-		setupMock  func(m *mocks.MockMenuService)
+		setupMock  func(m *mocks.MockUserService)
 		wantStatus int
 	}{
 		{
-			name: "happy path — 201 created",
+			name: "happy path — 201",
 			body: map[string]interface{}{
-				"category_id": 1,
-				"name":        "Classic Burger",
-				"price":       "350.00",
+				"name":          "Ahmed",
+				"phone":         "+79001234567",
+				"email":         "ahmed@bar108.com",
+				"password_hash": "hashed123",
 			},
-			setupMock: func(m *mocks.MockMenuService) {
+			setupMock: func(m *mocks.MockUserService) {
 				m.EXPECT().
-					CreateMenuItem(gomock.Any(), gomock.Any()).
-					Return(db.MenuItem{ID: 1, Name: "Classic Burger"}, nil)
+					CreateUser(gomock.Any(), gomock.Any()).
+					Return(db.User{ID: 1, Name: "Ahmed"}, nil)
 			},
 			wantStatus: http.StatusCreated,
 		},
 		{
-			// Missing required fields — Gin binding returns 400.
-			// Service never called.
 			name:       "missing required fields — 400",
-			body:       map[string]interface{}{"name": "Burger"},
-			setupMock:  func(m *mocks.MockMenuService) {},
+			body:       map[string]interface{}{"name": "Ahmed"},
+			setupMock:  func(m *mocks.MockUserService) {},
 			wantStatus: http.StatusBadRequest,
 		},
 		{
 			name:       "empty body — 400",
 			body:       nil,
-			setupMock:  func(m *mocks.MockMenuService) {},
+			setupMock:  func(m *mocks.MockUserService) {},
 			wantStatus: http.StatusBadRequest,
 		},
 		{
-			name: "zero price — service returns 400",
+			name: "service validation error — 400",
 			body: map[string]interface{}{
-				"category_id": 1,
-				"name":        "Burger",
-				"price":       "0.00",
+				"name":          "Ahmed",
+				"phone":         "+79001234567",
+				"email":         "notanemail",
+				"password_hash": "hashed123",
 			},
-			setupMock: func(m *mocks.MockMenuService) {
+			setupMock: func(m *mocks.MockUserService) {
 				m.EXPECT().
-					CreateMenuItem(gomock.Any(), gomock.Any()).
-					Return(db.MenuItem{}, apperror.ErrZeroPrice)
+					CreateUser(gomock.Any(), gomock.Any()).
+					Return(db.User{}, apperror.ErrInvalidInput)
 			},
 			wantStatus: http.StatusBadRequest,
 		},
 		{
 			name: "database error — 500",
 			body: map[string]interface{}{
-				"category_id": 1,
-				"name":        "Burger",
-				"price":       "350.00",
+				"name":          "Ahmed",
+				"phone":         "+79001234567",
+				"email":         "ahmed@bar108.com",
+				"password_hash": "hashed123",
 			},
-			setupMock: func(m *mocks.MockMenuService) {
+			setupMock: func(m *mocks.MockUserService) {
 				m.EXPECT().
-					CreateMenuItem(gomock.Any(), gomock.Any()).
-					Return(db.MenuItem{}, errors.New("constraint violated"))
+					CreateUser(gomock.Any(), gomock.Any()).
+					Return(db.User{}, errors.New("duplicate key"))
 			},
 			wantStatus: http.StatusInternalServerError,
 		},
@@ -256,10 +226,10 @@ func TestMenuHandler_CreateMenuItem(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r, mockSvc := setupMenuHandler(t)
+			r, mockSvc := setupUserHandler(t)
 			tt.setupMock(mockSvc)
 
-			w := doRequest(r, http.MethodPost, "/menu", tt.body)
+			w := doRequest(r, http.MethodPost, "/users", tt.body)
 
 			if w.Code != tt.wantStatus {
 				t.Errorf("got status %d, want %d — body: %s",
@@ -270,124 +240,199 @@ func TestMenuHandler_CreateMenuItem(t *testing.T) {
 }
 
 // =============================================
-// DELETE /menu/:id
+// PATCH /users/:id/activate
 // =============================================
 
-func TestMenuHandler_DeleteMenuItem(t *testing.T) {
+func TestUserHandler_ActivateUser(t *testing.T) {
 	tests := []struct {
 		name       string
 		url        string
-		setupMock  func(m *mocks.MockMenuService)
-		wantStatus int
-	}{
-		{
-			name: "happy path — 204 no content",
-			url:  "/menu/1",
-			setupMock: func(m *mocks.MockMenuService) {
-				m.EXPECT().
-					DeleteMenuItem(gomock.Any(), int32(1)).
-					Return(nil)
-			},
-			wantStatus: http.StatusNoContent,
-		},
-		{
-			name: "not found — 404",
-			url:  "/menu/999",
-			setupMock: func(m *mocks.MockMenuService) {
-				m.EXPECT().
-					DeleteMenuItem(gomock.Any(), int32(999)).
-					Return(apperror.ErrMenuNotFound)
-			},
-			wantStatus: http.StatusNotFound,
-		},
-		{
-			// parseID rejects "abc" before service is ever called.
-			name:       "invalid id string — 400",
-			url:        "/menu/abc",
-			setupMock:  func(m *mocks.MockMenuService) {},
-			wantStatus: http.StatusBadRequest,
-		},
-		{
-			name: "database error — 500",
-			url:  "/menu/1",
-			setupMock: func(m *mocks.MockMenuService) {
-				m.EXPECT().
-					DeleteMenuItem(gomock.Any(), int32(1)).
-					Return(errors.New("db error"))
-			},
-			wantStatus: http.StatusInternalServerError,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			r, mockSvc := setupMenuHandler(t)
-			tt.setupMock(mockSvc)
-
-			w := doRequest(r, http.MethodDelete, tt.url, nil)
-
-			if w.Code != tt.wantStatus {
-				t.Errorf("got status %d, want %d — body: %s",
-					w.Code, tt.wantStatus, w.Body.String())
-			}
-		})
-	}
-}
-
-// =============================================
-// PUT /menu/:id
-// =============================================
-
-func TestMenuHandler_UpdateMenuItem(t *testing.T) {
-	tests := []struct {
-		name       string
-		url        string
-		body       interface{}
-		setupMock  func(m *mocks.MockMenuService)
+		setupMock  func(m *mocks.MockUserService)
 		wantStatus int
 	}{
 		{
 			name: "happy path — 200",
-			url:  "/menu/1",
-			body: map[string]interface{}{
-				"category_id": 1,
-				"name":        "Updated Burger",
-				"price":       "400.00",
-				"available":   true,
-			},
-			setupMock: func(m *mocks.MockMenuService) {
+			url:  "/users/1/activate",
+			setupMock: func(m *mocks.MockUserService) {
 				m.EXPECT().
-					UpdateMenuItem(gomock.Any(), gomock.Any()).
-					Return(db.MenuItem{ID: 1, Name: "Updated Burger"}, nil)
+					ActivateUser(gomock.Any(), int32(1)).
+					Return(db.User{ID: 1, IsActive: true}, nil)
 			},
 			wantStatus: http.StatusOK,
 		},
 		{
-			name:       "invalid id string — 400",
-			url:        "/menu/abc",
-			body:       map[string]interface{}{"category_id": 1, "name": "Burger", "price": "350.00"},
-			setupMock:  func(m *mocks.MockMenuService) {},
+			name: "already active — 409",
+			url:  "/users/1/activate",
+			setupMock: func(m *mocks.MockUserService) {
+				m.EXPECT().
+					ActivateUser(gomock.Any(), int32(1)).
+					Return(db.User{}, apperror.ErrAlreadyActive)
+			},
+			wantStatus: http.StatusConflict,
+		},
+		{
+			name: "not found — 404",
+			url:  "/users/999/activate",
+			setupMock: func(m *mocks.MockUserService) {
+				m.EXPECT().
+					ActivateUser(gomock.Any(), int32(999)).
+					Return(db.User{}, apperror.ErrUserNotFound)
+			},
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			name:       "invalid id — 400",
+			url:        "/users/abc/activate",
+			setupMock:  func(m *mocks.MockUserService) {},
+			wantStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r, mockSvc := setupUserHandler(t)
+			tt.setupMock(mockSvc)
+
+			w := doRequest(r, http.MethodPatch, tt.url, nil)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("got status %d, want %d — body: %s",
+					w.Code, tt.wantStatus, w.Body.String())
+			}
+		})
+	}
+}
+
+// =============================================
+// PATCH /users/:id/deactivate
+// =============================================
+
+func TestUserHandler_DeactivateUser(t *testing.T) {
+	tests := []struct {
+		name       string
+		url        string
+		setupMock  func(m *mocks.MockUserService)
+		wantStatus int
+	}{
+		{
+			name: "happy path — 200",
+			url:  "/users/1/deactivate",
+			setupMock: func(m *mocks.MockUserService) {
+				m.EXPECT().
+					DeactivateUser(gomock.Any(), int32(1)).
+					Return(db.User{ID: 1, IsActive: false}, nil)
+			},
+			wantStatus: http.StatusOK,
+		},
+		{
+			name: "already inactive — 409",
+			url:  "/users/1/deactivate",
+			setupMock: func(m *mocks.MockUserService) {
+				m.EXPECT().
+					DeactivateUser(gomock.Any(), int32(1)).
+					Return(db.User{}, apperror.ErrAlreadyInactive)
+			},
+			wantStatus: http.StatusConflict,
+		},
+		{
+			name: "has active orders — 409",
+			url:  "/users/1/deactivate",
+			setupMock: func(m *mocks.MockUserService) {
+				m.EXPECT().
+					DeactivateUser(gomock.Any(), int32(1)).
+					Return(db.User{}, apperror.ErrHasActiveOrders)
+			},
+			wantStatus: http.StatusConflict,
+		},
+		{
+			name: "not found — 404",
+			url:  "/users/999/deactivate",
+			setupMock: func(m *mocks.MockUserService) {
+				m.EXPECT().
+					DeactivateUser(gomock.Any(), int32(999)).
+					Return(db.User{}, apperror.ErrUserNotFound)
+			},
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			name:       "invalid id — 400",
+			url:        "/users/abc/deactivate",
+			setupMock:  func(m *mocks.MockUserService) {},
+			wantStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r, mockSvc := setupUserHandler(t)
+			tt.setupMock(mockSvc)
+
+			w := doRequest(r, http.MethodPatch, tt.url, nil)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("got status %d, want %d — body: %s",
+					w.Code, tt.wantStatus, w.Body.String())
+			}
+		})
+	}
+}
+
+// =============================================
+// PATCH /users/:id/bonus
+// =============================================
+
+func TestUserHandler_UpdateUserBonusPoints(t *testing.T) {
+	tests := []struct {
+		name       string
+		url        string
+		body       interface{}
+		setupMock  func(m *mocks.MockUserService)
+		wantStatus int
+	}{
+		{
+			name: "happy path — 200",
+			url:  "/users/1/bonus",
+			body: map[string]interface{}{"bonus_points": 100},
+			setupMock: func(m *mocks.MockUserService) {
+				m.EXPECT().
+					UpdateUserBonusPoints(gomock.Any(), int32(1), int32(100)).
+					Return(db.User{ID: 1, BonusPoints: 100}, nil)
+			},
+			wantStatus: http.StatusOK,
+		},
+		{
+			name: "negative points — service returns 400",
+			url:  "/users/1/bonus",
+			body: map[string]interface{}{"bonus_points": -50},
+			setupMock: func(m *mocks.MockUserService) {
+				m.EXPECT().
+					UpdateUserBonusPoints(gomock.Any(), int32(1), int32(-50)).
+					Return(db.User{}, apperror.ErrInvalidInput)
+			},
 			wantStatus: http.StatusBadRequest,
 		},
 		{
 			name:       "missing body — 400",
-			url:        "/menu/1",
+			url:        "/users/1/bonus",
 			body:       nil,
-			setupMock:  func(m *mocks.MockMenuService) {},
+			setupMock:  func(m *mocks.MockUserService) {},
 			wantStatus: http.StatusBadRequest,
 		},
 		{
-			name: "not found — 404",
-			url:  "/menu/999",
-			body: map[string]interface{}{
-				"category_id": 1,
-				"name":        "Ghost Burger",
-				"price":       "350.00",
-			},
-			setupMock: func(m *mocks.MockMenuService) {
+			name:       "invalid id — 400",
+			url:        "/users/abc/bonus",
+			body:       map[string]interface{}{"bonus_points": 100},
+			setupMock:  func(m *mocks.MockUserService) {},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name: "user not found — 404",
+			url:  "/users/999/bonus",
+			body: map[string]interface{}{"bonus_points": 100},
+			setupMock: func(m *mocks.MockUserService) {
 				m.EXPECT().
-					UpdateMenuItem(gomock.Any(), gomock.Any()).
-					Return(db.MenuItem{}, apperror.ErrMenuNotFound)
+					UpdateUserBonusPoints(gomock.Any(), int32(999), int32(100)).
+					Return(db.User{}, apperror.ErrUserNotFound)
 			},
 			wantStatus: http.StatusNotFound,
 		},
@@ -395,10 +440,10 @@ func TestMenuHandler_UpdateMenuItem(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r, mockSvc := setupMenuHandler(t)
+			r, mockSvc := setupUserHandler(t)
 			tt.setupMock(mockSvc)
 
-			w := doRequest(r, http.MethodPut, tt.url, tt.body)
+			w := doRequest(r, http.MethodPatch, tt.url, tt.body)
 
 			if w.Code != tt.wantStatus {
 				t.Errorf("got status %d, want %d — body: %s",

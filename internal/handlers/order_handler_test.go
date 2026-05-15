@@ -15,7 +15,7 @@ import (
 )
 
 // setupOrderHandler creates a fresh mock + handler + router for each test.
-func setupOrderHandler(t *testing.T) (*gin.Engine, *mocks.MockOrderService) {
+func setupOrderHandlerAs(t *testing.T, userID int32, role string) (*gin.Engine, *mocks.MockOrderService) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	ctrl := gomock.NewController(t)
@@ -23,32 +23,33 @@ func setupOrderHandler(t *testing.T) (*gin.Engine, *mocks.MockOrderService) {
 	h := handlers.NewOrderHandler(mockSvc)
 
 	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("user_id", userID)
+		c.Set("role", role)
+		c.Next()
+	})
 
-	// Order routes — mirrors exactly what server.go registers
-	orders := r.Group("/orders")
-	{
-		orders.POST("", h.PlaceOrder)
-		orders.GET("", h.GetAllOrders)
-		orders.GET("/pending", h.GetPendingOrders)
-		orders.GET("/:id", h.GetOrderByID)
-		orders.GET("/:id/track", h.GetOrderStatusHistory)
-		orders.GET("/:id/items", h.GetOrderItems)
-		orders.PATCH("/:id/status", h.UpdateOrderStatus)
-		orders.PATCH("/:id/cancel", h.CancelOrder)
-		orders.PATCH("/:id/courier", h.AssignCourier)
-	}
-
+	r.POST("/orders", h.PlaceOrder)
+	r.GET("/orders", h.GetAllOrders)
+	r.GET("/orders/pending", h.GetPendingOrders)
+	r.GET("/orders/:id", h.GetOrderByID)
+	r.GET("/orders/:id/track", h.GetOrderStatusHistory)
+	r.GET("/orders/:id/items", h.GetOrderItems)
+	r.PATCH("/orders/:id/status", h.UpdateOrderStatus)
+	r.PATCH("/orders/:id/cancel", h.CancelOrder)
+	r.PATCH("/orders/:id/courier", h.AssignCourier)
 	r.GET("/users/:id/orders", h.GetOrdersByUserID)
-
-	couriers := r.Group("/couriers")
-	{
-		couriers.GET("", h.GetAllCouriers)
-		couriers.GET("/available", h.GetAvailableCouriers)
-		couriers.GET("/:id", h.GetCourierByID)
-		couriers.PATCH("/:id/status", h.UpdateCourierStatus)
-	}
+	r.GET("/couriers", h.GetAllCouriers)
+	r.GET("/couriers/available", h.GetAvailableCouriers)
+	r.GET("/couriers/:id", h.GetCourierByID)
+	r.PATCH("/couriers/:id/status", h.UpdateCourierStatus)
 
 	return r, mockSvc
+}
+
+// Keep the original for tests that don't need ownership checks
+func setupOrderHandler(t *testing.T) (*gin.Engine, *mocks.MockOrderService) {
+	return setupOrderHandlerAs(t, 1, "admin") // default to admin to avoid ownership issues
 }
 
 // =============================================
@@ -364,13 +365,20 @@ func TestOrderHandler_CancelOrder(t *testing.T) {
 	tests := []struct {
 		name       string
 		url        string
+		userID     int32
+		role       string
 		setupMock  func(m *mocks.MockOrderService)
 		wantStatus int
 	}{
 		{
-			name: "happy path — 200",
-			url:  "/orders/1/cancel",
+			name:   "happy path — owner cancels own order",
+			url:    "/orders/1/cancel",
+			userID: 1,
+			role:   "customer",
 			setupMock: func(m *mocks.MockOrderService) {
+				m.EXPECT().
+					GetOrderByID(gomock.Any(), int32(1)).
+					Return(db.GetOrderByIDRow{ID: 1, UserID: 1, Status: "pending"}, nil)
 				m.EXPECT().
 					CancelOrder(gomock.Any(), int32(1)).
 					Return(db.Order{ID: 1, Status: "cancelled"}, nil)
@@ -378,29 +386,64 @@ func TestOrderHandler_CancelOrder(t *testing.T) {
 			wantStatus: http.StatusOK,
 		},
 		{
-			// Delivered order — service returns 400
-			name: "cannot cancel delivered — 400",
-			url:  "/orders/1/cancel",
+			name:   "forbidden — customer cancels other user order",
+			url:    "/orders/1/cancel",
+			userID: 99,
+			role:   "customer",
 			setupMock: func(m *mocks.MockOrderService) {
 				m.EXPECT().
+					GetOrderByID(gomock.Any(), int32(1)).
+					Return(db.GetOrderByIDRow{ID: 1, UserID: 1, Status: "pending"}, nil)
+			},
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name:   "admin cancels any order",
+			url:    "/orders/1/cancel",
+			userID: 99,
+			role:   "admin",
+			setupMock: func(m *mocks.MockOrderService) {
+				m.EXPECT().
+					GetOrderByID(gomock.Any(), int32(1)).
+					Return(db.GetOrderByIDRow{ID: 1, UserID: 1, Status: "pending"}, nil)
+				m.EXPECT().
 					CancelOrder(gomock.Any(), int32(1)).
-					Return(db.Order{}, apperror.New(400, "cannot cancel a delivered order"))
+					Return(db.Order{ID: 1, Status: "cancelled"}, nil)
+			},
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:   "cannot cancel delivered — 400",
+			url:    "/orders/1/cancel",
+			userID: 1,
+			role:   "customer",
+			setupMock: func(m *mocks.MockOrderService) {
+				m.EXPECT().
+					GetOrderByID(gomock.Any(), int32(1)).
+					Return(db.GetOrderByIDRow{ID: 1, UserID: 1, Status: "delivered"}, nil)
+				m.EXPECT().
+					CancelOrder(gomock.Any(), int32(1)).
+					Return(db.Order{}, apperror.ErrInvalidInput)
 			},
 			wantStatus: http.StatusBadRequest,
 		},
 		{
-			name: "order not found — 404",
-			url:  "/orders/999/cancel",
+			name:   "order not found — 404",
+			url:    "/orders/999/cancel",
+			userID: 1,
+			role:   "customer",
 			setupMock: func(m *mocks.MockOrderService) {
 				m.EXPECT().
-					CancelOrder(gomock.Any(), int32(999)).
-					Return(db.Order{}, apperror.ErrOrderNotFound)
+					GetOrderByID(gomock.Any(), int32(999)).
+					Return(db.GetOrderByIDRow{}, apperror.ErrOrderNotFound)
 			},
 			wantStatus: http.StatusNotFound,
 		},
 		{
 			name:       "invalid id — 400",
 			url:        "/orders/abc/cancel",
+			userID:     1,
+			role:       "customer",
 			setupMock:  func(m *mocks.MockOrderService) {},
 			wantStatus: http.StatusBadRequest,
 		},
@@ -408,7 +451,7 @@ func TestOrderHandler_CancelOrder(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r, mockSvc := setupOrderHandler(t)
+			r, mockSvc := setupOrderHandlerAs(t, tt.userID, tt.role)
 			tt.setupMock(mockSvc)
 
 			w := doRequest(r, http.MethodPatch, tt.url, nil)

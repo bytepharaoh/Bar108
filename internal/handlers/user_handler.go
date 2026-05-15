@@ -3,6 +3,7 @@ package handlers
 import (
 	"bar108/internal/apperror"
 	"bar108/internal/db"
+	"bar108/internal/middleware"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -73,11 +74,26 @@ func (h *UserHandler) GetActiveUsers(c *gin.Context) {
 }
 
 func (h *UserHandler) GetUserByID(c *gin.Context) {
-	id, ok := parseID(c)
+	requestedID, ok := parseID(c)
 	if !ok {
 		return
 	}
-	user, err := h.service.GetUserByID(c.Request.Context(), id)
+
+	currentUserID, ok := middleware.GetUserID(c)
+	if !ok {
+		apperror.Respond(c, apperror.ErrUnauthorized)
+		return
+	}
+
+	role, _ := middleware.GetRole(c)
+
+	// Customers can only view their own profile
+	if role != "admin" && requestedID != currentUserID {
+		apperror.Respond(c, apperror.ErrForbidden)
+		return
+	}
+
+	user, err := h.service.GetUserByID(c.Request.Context(), requestedID)
 	if err != nil {
 		apperror.Respond(c, err)
 		return
@@ -112,6 +128,20 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 	if !ok {
 		return
 	}
+	currentUserID, ok := middleware.GetUserID(c)
+	if !ok {
+		apperror.Respond(c, apperror.ErrUnauthorized)
+		return
+	}
+
+	role, _ := middleware.GetRole(c)
+
+	// Customers can only update their own profile
+	if role != "admin" && id != currentUserID {
+		apperror.Respond(c, apperror.ErrForbidden)
+		return
+	}
+
 	var req updateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		apperror.Respond(c, apperror.ErrInvalidInput)
