@@ -13,7 +13,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16
+        image: postgres:16-alpine
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -28,13 +28,15 @@ jobs:
 
     env:
       APP_ENV: test
+      APP_PORT: 8080
       DB_HOST: localhost
       DB_PORT: 5432
       DB_USER: postgres
       DB_PASSWORD: postgres
       DB_NAME: bar108_test
       DB_SSLMODE: disable
-      JWT_SECRET: test-secret
+      JWT_SECRET: daef0e7d5c1e54a8601faf5c209bfe0b63f84014aa57fae5b993faf4ccbc5eb8
+      JWT_EXPIRY_HOURS: 24
 
     steps:
       - name: Checkout code
@@ -43,7 +45,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.26.1"
+          go-version: "1.26.1"  # update to match your go.mod
 
       - name: Cache Go modules
         uses: actions/cache@v4
@@ -60,17 +62,26 @@ jobs:
 
       - name: Check formatting
         run: |
-          test -z "$(gofmt -l .)"
+          if [ -n "$(gofmt -l .)" ]; then
+            echo "The following files are not formatted:"
+            gofmt -l .
+            exit 1
+          fi
 
       - name: Run go vet
         run: go vet ./...
 
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v9
+        uses: golangci/golangci-lint-action@v6
         with:
-          version: v2.12
-      - name: Run tests
-        run: go test ./... -v
+          version: latest
 
-      - name: Build app
+      - name: Run tests with race detector
+        run: go test -race -timeout 60s -count=1 ./...
+        # -count=1 disables test caching — always runs fresh
+
+      - name: Build binary
         run: go build -o bin/bar108 ./cmd/main.go
+
+      - name: Build Docker image
+        run: docker build -t bar108:${{ github.sha }} .
