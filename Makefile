@@ -47,20 +47,27 @@ vet:
 ## check: fmt + vet + lint (run before committing)
 check: fmt vet lint
 
-# ——— Database ——————————————————————————————
+# ——— Docker ————————————————————————————————
 
-## db-up: start PostgreSQL via Docker
-db-up:
-	docker-compose up -d
+## docker-build: build the production Docker image
+docker-build:
+	docker build -t bar108:latest .
 
-## db-down: stop PostgreSQL
-db-down:
-	docker-compose down
+## docker-up: start all services (db + app)
+docker-up:
+	docker compose up -d
 
-## db-logs: show database logs
-db-logs:
-	docker-compose logs -f db
-## migrate: run SQL migrations
+## docker-down: stop all services
+docker-down:
+	docker compose down
+
+## docker-logs: follow app logs
+docker-logs:
+	docker compose logs -f app
+
+## docker-restart: rebuild and restart the app
+docker-restart:
+	docker compose up -d --build app## migrate: run SQL migrations
 migrate:
 	docker exec -i bar108_db psql -U $(DB_USER) -d $(DB_NAME) < db/migrations/001_init.sql
 migrate-up:
@@ -99,6 +106,7 @@ mocks:
 		-package=mocks
 jwt:
 	openssl rand -hex 32
+
 # ——— Help ——————————————————————————————————
 
 ## help: print all available commands
@@ -106,4 +114,4 @@ help:
 	@echo "Available commands:"
 	@sed -n 's/^##//p' $(MAKEFILE_LIST) | column -t -s ':' | sed -e 's/^/ /'
 
-.PHONY: run build clean fmt lint vet check db-up db-down db-logs help migrate db-shell sqlc migrate-up migrate-down test test-coverage generate mocks jwt
+.PHONY: run build clean fmt lint vet check help migrate db-shell sqlc migrate-up migrate-down test test-coverage generate mocks jwt docker-build docker-up docker-down docker-logs docker-restart 

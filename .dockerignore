@@ -1,0 +1,33 @@
+# Git
+.git
+.gitignore
+
+# Environment files — never copy secrets into Docker image
+.env
+.env.*
+
+# Compiled binaries
+bin/
+
+# Go cache
+.gocache/
+.golangci-cache/
+
+# Test files
+*_test.go
+
+# Editor
+.idea/
+.vscode/
+*.swp
+
+# Docker files themselves
+Dockerfile
+docker-compose*.yml
+
+# Docs
+docs/
+README.md
+
+# Coverage reports
+coverage.out

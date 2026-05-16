@@ -27,6 +27,7 @@ func main() {
 			log.Printf("main: error closing database: %v", err)
 		}
 	}()
+		database.Migrate(db, "./db/migrations")
 
 	jwtManager := jwtpkg.New(cfg.JWT)
 

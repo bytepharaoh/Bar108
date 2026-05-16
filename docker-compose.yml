@@ -1,18 +1,49 @@
-version: '3.8'
 
 services:
+  # PostgreSQL database
   db:
-    image: postgres:16-alpine        # alpine = smaller image size
+    image: postgres:16-alpine
     container_name: bar108_db
-    restart: unless-stopped          # auto-restart if it crashes
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: ${DB_USER}      # reads from your .env file
+      POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME}
     ports:
-      - "${DB_PORT}:5432"            # maps your machine's port to container's port
+      - "${DB_PORT}:5432"
     volumes:
-      - bar108_pgdata:/var/lib/postgresql/data   # persists data between restarts
+      - bar108_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # Wait until PostgreSQL is actually ready to accept connections.
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Go application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bar108_app
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT}:8080"
+    environment:
+      APP_PORT: 8080
+      APP_ENV: ${APP_ENV}
+      DB_HOST: db          
+      DB_PORT: 5432
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      DB_SSLMODE: ${DB_SSLMODE}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRY_HOURS: ${JWT_EXPIRY_HOURS}
+    depends_on:
+      db:
+        condition: service_healthy
+
 
 volumes:
-  bar108_pgdata:                     # named volume — Docker manages this
+  bar108_pgdata:
