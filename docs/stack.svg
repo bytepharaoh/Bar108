@@ -1,0 +1,40 @@
+<svg width="780" height="120" viewBox="0 0 780 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="780" height="120" fill="#0D0D0D" rx="12"/>
+  <text x="390" y="26" text-anchor="middle" font-family="monospace" font-size="10" fill="#444" letter-spacing="4">TECH STACK</text>
+
+  <!-- Go -->
+  <rect x="20" y="44" width="100" height="56" rx="8" fill="#1A1A1A" stroke="#00ADD8" stroke-width="1.2"/>
+  <text x="70" y="68" text-anchor="middle" font-family="monospace" font-size="12" font-weight="bold" fill="#00ADD8">Go 1.22</text>
+  <text x="70" y="86" text-anchor="middle" font-family="monospace" font-size="9" fill="#444">+ Gin</text>
+
+  <!-- PostgreSQL -->
+  <rect x="135" y="44" width="100" height="56" rx="8" fill="#1A1A1A" stroke="#4169E1" stroke-width="1.2"/>
+  <text x="185" y="68" text-anchor="middle" font-family="monospace" font-size="11" font-weight="bold" fill="#4169E1">Postgres</text>
+  <text x="185" y="86" text-anchor="middle" font-family="monospace" font-size="9" fill="#444">v16 · SQLC</text>
+
+  <!-- Docker -->
+  <rect x="250" y="44" width="100" height="56" rx="8" fill="#1A1A1A" stroke="#2496ED" stroke-width="1.2"/>
+  <text x="300" y="68" text-anchor="middle" font-family="monospace" font-size="11" font-weight="bold" fill="#2496ED">Docker</text>
+  <text x="300" y="86" text-anchor="middle" font-family="monospace" font-size="9" fill="#444">multi-stage</text>
+
+  <!-- JWT -->
+  <rect x="365" y="44" width="100" height="56" rx="8" fill="#1A1A1A" stroke="#FF4D00" stroke-width="1.2"/>
+  <text x="415" y="68" text-anchor="middle" font-family="monospace" font-size="11" font-weight="bold" fill="#FF4D00">JWT</text>
+  <text x="415" y="86" text-anchor="middle" font-family="monospace" font-size="9" fill="#444">HS256 · bcrypt</text>
+
+  <!-- Goose -->
+  <rect x="480" y="44" width="100" height="56" rx="8" fill="#1A1A1A" stroke="#00D4AA" stroke-width="1.2"/>
+  <text x="530" y="68" text-anchor="middle" font-family="monospace" font-size="11" font-weight="bold" fill="#00D4AA">Goose</text>
+  <text x="530" y="86" text-anchor="middle" font-family="monospace" font-size="9" fill="#444">up/down migrations</text>
+
+  <!-- Testing -->
+  <rect x="595" y="44" width="100" height="56" rx="8" fill="#1A1A1A" stroke="#FFB800" stroke-width="1.2"/>
+  <text x="645" y="68" text-anchor="middle" font-family="monospace" font-size="11" font-weight="bold" fill="#FFB800">Testing</text>
+  <text x="645" y="86" text-anchor="middle" font-family="monospace" font-size="9" fill="#444">gomock · testify</text>
+
+  <!-- CI/CD -->
+  <rect x="710" y="44" width="52" height="56" rx="8" fill="#1A1A1A" stroke="#555" stroke-width="1.2"/>
+  <text x="736" y="68" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold" fill="#888">CI/CD</text>
+  <text x="736" y="84" text-anchor="middle" font-family="monospace" font-size="8" fill="#444">GitHub</text>
+  <text x="736" y="96" text-anchor="middle" font-family="monospace" font-size="8" fill="#444">Actions</text>
+</svg>

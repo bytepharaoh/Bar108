@@ -1,0 +1,58 @@
+<svg width="780" height="160" viewBox="0 0 780 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="780" height="160" fill="#0D0D0D" rx="12"/>
+  <text x="390" y="26" text-anchor="middle" font-family="monospace" font-size="10" fill="#444" letter-spacing="4">ORDER STATUS FLOW</text>
+
+  <!-- States -->
+  <rect x="14" y="48" width="90" height="32" rx="6" fill="#1A1A1A" stroke="#555" stroke-width="1.2"/>
+  <text x="59" y="69" text-anchor="middle" font-family="monospace" font-size="10" fill="#777">pending</text>
+
+  <rect x="124" y="48" width="90" height="32" rx="6" fill="#1A1A1A" stroke="#FF8C00" stroke-width="1.2"/>
+  <text x="169" y="69" text-anchor="middle" font-family="monospace" font-size="10" fill="#FF8C00">confirmed</text>
+
+  <rect x="234" y="48" width="90" height="32" rx="6" fill="#1A1A1A" stroke="#FFB800" stroke-width="1.2"/>
+  <text x="279" y="69" text-anchor="middle" font-family="monospace" font-size="10" fill="#FFB800">preparing</text>
+
+  <rect x="344" y="48" width="90" height="32" rx="6" fill="#1A1A1A" stroke="#FFD700" stroke-width="1.2"/>
+  <text x="389" y="69" text-anchor="middle" font-family="monospace" font-size="10" fill="#FFD700">ready</text>
+
+  <rect x="454" y="48" width="90" height="32" rx="6" fill="#1A1A1A" stroke="#00AAFF" stroke-width="1.2"/>
+  <text x="499" y="62" text-anchor="middle" font-family="monospace" font-size="9" fill="#00AAFF">out_for_</text>
+  <text x="499" y="75" text-anchor="middle" font-family="monospace" font-size="9" fill="#00AAFF">delivery</text>
+
+  <rect x="564" y="48" width="90" height="32" rx="6" fill="#1A1A1A" stroke="#00D4AA" stroke-width="1.5"/>
+  <text x="609" y="69" text-anchor="middle" font-family="monospace" font-size="10" fill="#00D4AA">delivered</text>
+
+  <!-- Arrows forward -->
+  <line x1="104" y1="64" x2="124" y2="64" stroke="#555" stroke-width="1.5"/>
+  <polygon points="124,64 114,59 114,69" fill="#555"/>
+
+  <line x1="214" y1="64" x2="234" y2="64" stroke="#FF8C00" stroke-width="1.5"/>
+  <polygon points="234,64 224,59 224,69" fill="#FF8C00"/>
+
+  <line x1="324" y1="64" x2="344" y2="64" stroke="#FFB800" stroke-width="1.5"/>
+  <polygon points="344,64 334,59 334,69" fill="#FFB800"/>
+
+  <line x1="434" y1="64" x2="454" y2="64" stroke="#FFD700" stroke-width="1.5"/>
+  <polygon points="454,64 444,59 444,69" fill="#FFD700"/>
+
+  <line x1="544" y1="64" x2="564" y2="64" stroke="#00AAFF" stroke-width="1.5"/>
+  <polygon points="564,64 554,59 554,69" fill="#00AAFF"/>
+
+  <!-- Cancel arc -->
+  <path d="M 59 80 Q 279 130 499 80" stroke="#FF4D00" stroke-width="1.2" stroke-dasharray="5 3" fill="none"/>
+  <polygon points="499,80 490,84 492,74" fill="#FF4D00"/>
+
+  <rect x="670" y="48" width="96" height="32" rx="6" fill="#1A1A1A" stroke="#FF4D00" stroke-width="1.2"/>
+  <text x="718" y="69" text-anchor="middle" font-family="monospace" font-size="10" fill="#FF4D00">cancelled</text>
+
+  <line x1="499" y1="80" x2="670" y2="64" stroke="#FF4D00" stroke-width="1" stroke-dasharray="4 3"/>
+
+  <!-- Labels -->
+  <text x="59" y="108" text-anchor="middle" font-family="monospace" font-size="8" fill="#444">customer</text>
+  <text x="169" y="108" text-anchor="middle" font-family="monospace" font-size="8" fill="#444">restaurant</text>
+  <text x="279" y="108" text-anchor="middle" font-family="monospace" font-size="8" fill="#444">kitchen</text>
+  <text x="389" y="108" text-anchor="middle" font-family="monospace" font-size="8" fill="#444">pickup ready</text>
+  <text x="499" y="108" text-anchor="middle" font-family="monospace" font-size="8" fill="#444">courier</text>
+  <text x="609" y="108" text-anchor="middle" font-family="monospace" font-size="8" fill="#444">done ✓</text>
+  <text x="390" y="148" text-anchor="middle" font-family="monospace" font-size="8" fill="#FF4D00">can cancel from any stage</text>
+</svg>
