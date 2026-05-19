@@ -2,6 +2,7 @@ package server
 
 import (
 	"bar108/config"
+	"bar108/internal/cache"
 	"bar108/internal/handlers"
 	jwtpkg "bar108/internal/jwt"
 	"bar108/internal/middleware"
@@ -20,6 +21,7 @@ import (
 type Server struct {
 	httpServer *http.Server
 	router     *gin.Engine
+	cache      *cache.Client
 }
 
 func New(cfg *config.Config, db *sql.DB, jwtManager *jwtpkg.Manager) *Server {
@@ -46,12 +48,13 @@ func New(cfg *config.Config, db *sql.DB, jwtManager *jwtpkg.Manager) *Server {
 		},
 	}
 
-	// Pass jwtManager into setupRoutes
-	s.setupRoutes(db, jwtManager)
+	cacheClient := cache.New(cfg.Redis)
+	s.cache = cacheClient // ← add this line
+	s.setupRoutes(db, jwtManager, cacheClient)
 	return s
 }
 
-func (s *Server) setupRoutes(db *sql.DB, jwtManager *jwtpkg.Manager) {
+func (s *Server) setupRoutes(db *sql.DB, jwtManager *jwtpkg.Manager, cacheClient *cache.Client) {
 	menuRepo := newMenuRepository(db)
 	userRepo := newUserRepository(db)
 	orderRepo := newOrderRepository(db)
@@ -64,7 +67,8 @@ func (s *Server) setupRoutes(db *sql.DB, jwtManager *jwtpkg.Manager) {
 	menuHandler := handlers.NewMenuHandler(menuSvc)
 	userHandler := handlers.NewUserHandler(userSvc)
 	orderHandler := newOrderHandler(orderSvc)
-	authHandler := newAuthHandler(authSvc)
+	authHandler := handlers.NewAuthHandler(authSvc, cacheClient, jwtManager)
+	s.router.Use(middleware.RateLimitMiddleware(cacheClient, 100, time.Minute))
 
 	// Health check — always public
 	s.router.GET("/ping", func(c *gin.Context) {
@@ -76,12 +80,15 @@ func (s *Server) setupRoutes(db *sql.DB, jwtManager *jwtpkg.Manager) {
 	s.router.GET("/menu/:id", menuHandler.GetMenuItemByID)
 	s.router.GET("/categories", menuHandler.GetAllCategories)
 
-	s.router.POST("/auth/register", authHandler.Register)
-	s.router.POST("/auth/login", authHandler.Login)
+	authLimited := s.router.Group("")
+	authLimited.Use(middleware.RateLimitMiddleware(cacheClient, 10, time.Minute))
+	authLimited.POST("/auth/register", authHandler.Register)
+	authLimited.POST("/auth/login", authHandler.Login)
 
-	// ── Authenticated routes ─────────────────────────────
+	// Logout — requires auth
 	authed := s.router.Group("")
-	authed.Use(middleware.AuthMiddleware(jwtManager))
+	authed.Use(middleware.AuthMiddleware(jwtManager, cacheClient))
+	authed.POST("/auth/logout", authHandler.Logout)
 	{
 		// Any logged-in user
 		authed.POST("/orders", orderHandler.PlaceOrder)
@@ -135,9 +142,13 @@ func (s *Server) Run() {
 	log.Println("server: shutting down gracefully...")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-
 	if err := s.httpServer.Shutdown(ctx); err != nil {
 		log.Printf("server: forced shutdown: %v", err)
 	}
+	// Close Redis connection
+	if err := s.cache.Close(); err != nil {
+		log.Printf("server: error closing Redis: %v", err)
+	}
 	log.Println("server: stopped")
+
 }

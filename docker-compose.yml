@@ -19,7 +19,19 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-
+  redis:
+    image: redis:7-alpine
+    container_name: bar108_redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - bar108_redis_data:/data
+    healthcheck:
+      test: ["CMD","redis-cli","ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
   # Go application
   app:
     build:
@@ -40,10 +52,16 @@ services:
       DB_SSLMODE: ${DB_SSLMODE}
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRY_HOURS: ${JWT_EXPIRY_HOURS}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
 
 volumes:
   bar108_pgdata:
+  bar108_redis_data:

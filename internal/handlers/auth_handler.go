@@ -2,9 +2,14 @@ package handlers
 
 import (
 	"bar108/internal/apperror"
+	"bar108/internal/cache"
+	"bar108/internal/jwt"
+	"bar108/internal/middleware"
 	"bar108/internal/services"
 	"context"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -15,11 +20,17 @@ type authSvc interface {
 }
 
 type AuthHandler struct {
-	service authSvc
+	service    authSvc
+	cache      *cache.Client
+	jwtManager *jwt.Manager
 }
 
-func NewAuthHandler(service authSvc) *AuthHandler {
-	return &AuthHandler{service: service}
+func NewAuthHandler(service authSvc, cache *cache.Client, jwtManager *jwt.Manager) *AuthHandler {
+	return &AuthHandler{
+		service:    service,
+		cache:      cache,
+		jwtManager: jwtManager,
+	}
 }
 
 type registerRequest struct {
@@ -88,4 +99,41 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			"role":  result.User.Role,
 		},
 	})
+}
+
+// Logout invalidates the current JWT by storing its JTI in Redis.
+func (h *AuthHandler) Logout(c *gin.Context) {
+	jti, ok := middleware.GetJTI(c)
+	if !ok {
+		apperror.Respond(c, apperror.ErrUnauthorized)
+		return
+	}
+
+	// Get expiry from the token directly
+	// Re-parse from Authorization header to get claims
+	authHeader := c.GetHeader("Authorization")
+	parts := strings.SplitN(authHeader, " ", 2)
+	if len(parts) != 2 {
+		apperror.Respond(c, apperror.ErrUnauthorized)
+		return
+	}
+	claims, err := h.jwtManager.Verify(parts[1])
+	if err != nil {
+		apperror.Respond(c, apperror.ErrUnauthorized)
+		return
+	}
+
+	ttl := time.Until(claims.ExpiresAt.Time)
+	if ttl <= 0 {
+		// Token already expired — nothing to blacklist
+		c.JSON(http.StatusOK, gin.H{"message": "logged out successfully"})
+		return
+	}
+
+	if err := h.cache.BlacklistToken(c.Request.Context(), jti, ttl); err != nil {
+		apperror.Respond(c, apperror.ErrInternal)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "logged out successfully"})
 }

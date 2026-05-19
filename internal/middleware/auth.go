@@ -2,8 +2,12 @@ package middleware
 
 import (
 	"bar108/internal/apperror"
+	"bar108/internal/cache"
 	"bar108/internal/jwt"
+	"fmt"
+	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -13,53 +17,58 @@ type contextKey string
 const (
 	ContextUserID contextKey = "user_id"
 	ContextRole   contextKey = "role"
+	ContextJTI    contextKey = "jti" // ← add this
 )
 
-// AuthMiddleware verifies the JWT token on every protected request.
-// Flow:
-// 1. Read Authorization header
-// 2. Extract "Bearer <token>"
-// 3. Verify token signature + expiry
-// 4. Inject user_id and role into Gin context
-// 5. Call next handler
-//
-// If anything fails → 401 Unauthorized, request stops here.
-
-func AuthMiddleware(jwtManager *jwt.Manager) gin.HandlerFunc {
+// AuthMiddleware now also checks token blacklist in Redis.
+// The cache client is injected — same pattern as everything else.
+func AuthMiddleware(jwtManager *jwt.Manager, cache *cache.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Read the Authorization header
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
 			apperror.Respond(c, apperror.ErrUnauthorized)
-			c.Abort() // stop processing — don't call next handlers
+			c.Abort()
 			return
-		} // Header format must be "Bearer <token>"
-		// Split on space — we expect exactly 2 parts
+		}
+
 		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) != 2 || parts[0] != "Bearer" {
 			apperror.Respond(c, apperror.ErrUnauthorized)
 			c.Abort()
 			return
 		}
-		tokenStr := parts[1]
-		// Verify the token — checks signature + expiry
-		claims, err := jwtManager.Verify(tokenStr)
+
+		claims, err := jwtManager.Verify(parts[1])
 		if err != nil {
 			apperror.Respond(c, apperror.ErrUnauthorized)
 			c.Abort()
 			return
 		}
-		// Inject claims into context so handlers can read them
-		// without knowing anything about JWT
+
+		// Check if this specific token has been blacklisted (logged out).
+		// This is what makes logout actually work with stateless JWTs.
+		blacklisted, err := cache.IsTokenBlacklisted(c.Request.Context(), claims.ID)
+		if err != nil {
+			// Redis is down — fail open or closed?
+			// We fail CLOSED (reject the request) because security
+			// is more important than availability here.
+			apperror.Respond(c, apperror.ErrInternal)
+			c.Abort()
+			return
+		}
+		if blacklisted {
+			apperror.Respond(c, apperror.ErrUnauthorized)
+			c.Abort()
+			return
+		}
+
 		c.Set(string(ContextUserID), claims.UserID)
 		c.Set(string(ContextRole), claims.Role)
-
-		// All good — proceed to the actual handler
+		c.Set(string(ContextJTI), claims.ID) // ← store JTI for logout
 		c.Next()
 	}
 }
 
-// AdminMiddleware ensures the user has the admin role.
 func AdminMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		role, exists := c.Get(string(ContextRole))
@@ -68,16 +77,45 @@ func AdminMiddleware() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-
 		if role != "admin" {
 			apperror.Respond(c, apperror.ErrForbidden)
 			c.Abort()
 			return
 		}
+		c.Next()
+	}
+}
+
+// RateLimitMiddleware limits requests per IP per window.
+// limit = max requests, window = time window duration.
+func RateLimitMiddleware(cache *cache.Client, limit int64, window time.Duration) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ip := c.ClientIP()
+
+		count, err := cache.IncrementRateLimit(c.Request.Context(), ip, window)
+		if err != nil {
+			// Redis down — fail open (allow the request)
+			// Rate limiting is not worth breaking the app for
+			c.Next()
+			return
+		}
+
+		if count > limit {
+			c.JSON(http.StatusTooManyRequests, gin.H{
+				"error": "too many requests — slow down",
+			})
+			c.Abort()
+			return
+		}
+
+		// Tell the client how many requests they have left
+		c.Header("X-RateLimit-Limit", fmt.Sprintf("%d", limit))
+		c.Header("X-RateLimit-Remaining", fmt.Sprintf("%d", limit-count))
 
 		c.Next()
 	}
 }
+
 func GetUserID(c *gin.Context) (int32, bool) {
 	val, exists := c.Get(string(ContextUserID))
 	if !exists {
@@ -87,7 +125,6 @@ func GetUserID(c *gin.Context) (int32, bool) {
 	return id, ok
 }
 
-// GetRole is a helper to read the current user's role from context.
 func GetRole(c *gin.Context) (string, bool) {
 	val, exists := c.Get(string(ContextRole))
 	if !exists {
@@ -95,4 +132,13 @@ func GetRole(c *gin.Context) (string, bool) {
 	}
 	role, ok := val.(string)
 	return role, ok
+}
+
+func GetJTI(c *gin.Context) (string, bool) {
+	val, exists := c.Get(string(ContextJTI))
+	if !exists {
+		return "", false
+	}
+	jti, ok := val.(string)
+	return jti, ok
 }

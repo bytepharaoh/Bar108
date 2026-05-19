@@ -2,17 +2,21 @@ package handlers
 
 import (
 	"bar108/internal/apperror"
+	"bar108/internal/cache"
 	"bar108/internal/db"
 	"bar108/internal/services"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
 type MenuHandler struct {
 	service services.MenuService
+	cache   *cache.Client
 }
 type createMenuItemsRequest struct {
 	CategoryID  int32  `json:"category_id" binding:"required"`
@@ -99,18 +103,41 @@ func NewMenuHandler(service menuService) *MenuHandler {
 	}
 }
 func (h *MenuHandler) GetAllMenuItems(c *gin.Context) {
+	// Try cache first
+	if h.cache != nil {
+		cached, err := h.cache.GetMenu(c.Request.Context())
+		if err == nil && cached != "" {
+			// Cache hit — return immediately, no DB query
+			c.Header("X-Cache", "HIT")
+			c.Data(http.StatusOK, "application/json", []byte(cached))
+			return
+		}
+	}
+
+	// Cache miss — query the database
 	items, err := h.service.GetAllMenuItems(c.Request.Context())
 	if err != nil {
 		apperror.Respond(c, err)
 		return
 	}
+
 	resp := make([]menuItemResponse, len(items))
 	for i, item := range items {
 		resp[i] = toMenuItemResponse(item)
 	}
-	c.JSON(http.StatusOK, gin.H{"data": resp})
-}
 
+	result := gin.H{"data": resp}
+
+	// Store in cache for 60 seconds
+	if h.cache != nil {
+		if data, err := json.Marshal(result); err == nil {
+			_ = h.cache.SetMenu(c.Request.Context(), string(data), 60*time.Second)
+		}
+	}
+
+	c.Header("X-Cache", "MISS")
+	c.JSON(http.StatusOK, result)
+}
 func (h *MenuHandler) GetMenuItemByID(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -171,6 +198,10 @@ func (h *MenuHandler) CreateMenuItem(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusCreated, gin.H{"data": toMenuItemFromCreate(item)})
+	if h.cache != nil {
+		_ = h.cache.InvalidateMenu(c.Request.Context())
+	}
+
 }
 func (h *MenuHandler) UpdateMenuItem(c *gin.Context) {
 	id, ok := parseID(c)
@@ -210,6 +241,10 @@ func (h *MenuHandler) UpdateMenuItem(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": toMenuItemFromCreate(item)})
+	if h.cache != nil {
+		_ = h.cache.InvalidateMenu(c.Request.Context())
+	}
+
 }
 func (h *MenuHandler) DeleteMenuItem(c *gin.Context) {
 	id, ok := parseID(c)
@@ -230,4 +265,8 @@ func (h *MenuHandler) DeleteMenuItem(c *gin.Context) {
 		return
 	}
 	c.Status(http.StatusNoContent)
+	if h.cache != nil {
+		_ = h.cache.InvalidateMenu(c.Request.Context())
+	}
+
 }

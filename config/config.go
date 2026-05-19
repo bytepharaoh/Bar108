@@ -11,6 +11,7 @@ type Config struct {
 	AppEnv  string
 	DB      DBConfig
 	JWT     JWTConfig
+	Redis   RedisConfig
 }
 
 type DBConfig struct {
@@ -21,6 +22,10 @@ type DBConfig struct {
 	Name     string
 	SSLMode  string
 }
+type RedisConfig struct {
+	Host string
+	Port string
+}
 
 // JWTConfig holds everything needed to sign and verify tokens.
 type JWTConfig struct {
@@ -29,6 +34,7 @@ type JWTConfig struct {
 }
 
 func Load() (*Config, error) {
+
 	expiryHours, err := strconv.Atoi(getEnv("JWT_EXPIRY_HOURS", "24"))
 	if err != nil {
 		expiryHours = 24
@@ -48,6 +54,10 @@ func Load() (*Config, error) {
 		JWT: JWTConfig{
 			Secret:      getEnv("JWT_SECRET", ""),
 			ExpiryHours: expiryHours,
+		},
+		Redis: RedisConfig{
+			Host: getEnv("REDIS_HOST", "localhost"),
+			Port: getEnv("REDIS_PORT", "6379"),
 		},
 	}
 

@@ -1,6 +1,8 @@
 package server
 
 import (
+	"bar108/config"
+	"bar108/internal/cache"
 	"bar108/internal/handlers"
 	jwtpkg "bar108/internal/jwt"
 	"bar108/internal/repository"
@@ -40,6 +42,6 @@ func newAuthService(store *repository.UsersRepository, jwtManager *jwtpkg.Manage
 	return services.NewAuthService(store, jwtManager)
 }
 
-func newAuthHandler(svc services.AuthService) *handlers.AuthHandler {
-	return handlers.NewAuthHandler(svc)
+func newCacheClient(cfg *config.Config) *cache.Client {
+	return cache.New(cfg.Redis)
 }
