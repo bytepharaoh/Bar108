@@ -50,11 +50,11 @@ func New(cfg *config.Config, db *sql.DB, jwtManager *jwtpkg.Manager) *Server {
 
 	cacheClient := cache.New(cfg.Redis)
 	s.cache = cacheClient // ← add this line
-	s.setupRoutes(db, jwtManager, cacheClient)
+	s.setupRoutes(cfg, db, jwtManager, cacheClient)
 	return s
 }
 
-func (s *Server) setupRoutes(db *sql.DB, jwtManager *jwtpkg.Manager, cacheClient *cache.Client) {
+func (s *Server) setupRoutes(cfg *config.Config, db *sql.DB, jwtManager *jwtpkg.Manager, cacheClient *cache.Client) {
 	menuRepo := newMenuRepository(db)
 	userRepo := newUserRepository(db)
 	orderRepo := newOrderRepository(db)
@@ -68,7 +68,7 @@ func (s *Server) setupRoutes(db *sql.DB, jwtManager *jwtpkg.Manager, cacheClient
 	userHandler := handlers.NewUserHandler(userSvc)
 	orderHandler := newOrderHandler(orderSvc)
 	authHandler := handlers.NewAuthHandler(authSvc, cacheClient, jwtManager)
-	s.router.Use(middleware.RateLimitMiddleware(cacheClient, 100, time.Minute))
+	//s.router.Use(middleware.RateLimitMiddleware(cacheClient, 100, time.Minute))
 
 	// Health check — always public
 	s.router.GET("/ping", func(c *gin.Context) {
@@ -81,7 +81,7 @@ func (s *Server) setupRoutes(db *sql.DB, jwtManager *jwtpkg.Manager, cacheClient
 	s.router.GET("/categories", menuHandler.GetAllCategories)
 
 	authLimited := s.router.Group("")
-	authLimited.Use(middleware.RateLimitMiddleware(cacheClient, 10, time.Minute))
+	authLimited.Use(middleware.RateLimitMiddleware(cacheClient, cfg.RateLimitAuthPerMinute, time.Minute))
 	authLimited.POST("/auth/register", authHandler.Register)
 	authLimited.POST("/auth/login", authHandler.Login)
 

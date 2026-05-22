@@ -88,16 +88,18 @@ func (c *Client) InvalidateMenu(ctx context.Context) error {
 // Rate Limiting
 
 func (c *Client) IncrementRateLimit(ctx context.Context, key string, window time.Duration) (int64, error) {
-
-	pipe := c.rdb.Pipeline()
-	// Increment the counter atomically
-	incr := pipe.Incr(ctx, rateLimitKey(key))
-	// Set expiry on first request — EXPIRE is ignored if key already has a TTL
-	pipe.Expire(ctx, rateLimitKey(key), window)
-	if _, err := pipe.Exec(ctx); err != nil {
-		return 0, fmt.Errorf("cache: IncrementRateLimit: %w", err)
+	counterKey := rateLimitKey(key)
+	count, err := c.rdb.Incr(ctx, counterKey).Result()
+	if err != nil {
+		return 0, fmt.Errorf("cache: IncrementRateLimit incr: %w", err)
 	}
-	return incr.Val(), nil
+	// Use a fixed window: set TTL only when the counter is first created.
+	if count == 1 {
+		if err := c.rdb.Expire(ctx, counterKey, window).Err(); err != nil {
+			return 0, fmt.Errorf("cache: IncrementRateLimit expire: %w", err)
+		}
+	}
+	return count, nil
 
 }
 func rateLimitKey(key string) string {

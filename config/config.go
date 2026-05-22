@@ -9,6 +9,7 @@ import (
 type Config struct {
 	AppPort string
 	AppEnv  string
+	RateLimitAuthPerMinute int64
 	DB      DBConfig
 	JWT     JWTConfig
 	Redis   RedisConfig
@@ -43,6 +44,7 @@ func Load() (*Config, error) {
 	cfg := &Config{
 		AppPort: getEnv("APP_PORT", "8080"),
 		AppEnv:  getEnv("APP_ENV", "development"),
+		RateLimitAuthPerMinute: getEnvInt64("RATE_LIMIT_AUTH_PER_MINUTE", 50),
 		DB: DBConfig{
 			Host:     getEnv("DB_HOST", "localhost"),
 			Port:     getEnv("DB_PORT", "5432"),
@@ -82,4 +84,16 @@ func getEnv(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func getEnvInt64(key string, fallback int64) int64 {
+	value, ok := os.LookupEnv(key)
+	if !ok {
+		return fallback
+	}
+	parsed, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || parsed <= 0 {
+		return fallback
+	}
+	return parsed
 }

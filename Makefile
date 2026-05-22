@@ -69,7 +69,10 @@ docker-logs:
 docker-restart:
 	docker compose up -d --build app## migrate: run SQL migrations
 migrate:
-	docker exec -i bar108_db psql -U $(DB_USER) -d $(DB_NAME) < db/migrations/001_init.sql
+	sed '/^-- +goose Down/,$$d' db/migrations/000001_init.sql | docker exec -i bar108_db psql -U $(DB_USER) -d $(DB_NAME)
+	sed '/^-- +goose Down/,$$d' db/migrations/000002_add_is_active_to_users.sql | docker exec -i bar108_db psql -U $(DB_USER) -d $(DB_NAME)
+	sed '/^-- +goose Down/,$$d' db/migrations/000003_add_role_to_users.sql | docker exec -i bar108_db psql -U $(DB_USER) -d $(DB_NAME)
+	sed '/^-- +goose Down/,$$d' db/migrations/000004_seed_menu_items.sql | docker exec -i bar108_db psql -U $(DB_USER) -d $(DB_NAME)
 migrate-up:
 	migrate -path db/migrations -database "$(DB_URL)" up
 migrate-down:

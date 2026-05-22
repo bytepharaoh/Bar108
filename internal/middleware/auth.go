@@ -91,8 +91,13 @@ func AdminMiddleware() gin.HandlerFunc {
 func RateLimitMiddleware(cache *cache.Client, limit int64, window time.Duration) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ip := c.ClientIP()
+		route := c.FullPath()
+		if route == "" {
+			route = c.Request.URL.Path
+		}
+		key := fmt.Sprintf("%s:%s:%s", ip, c.Request.Method, route)
 
-		count, err := cache.IncrementRateLimit(c.Request.Context(), ip, window)
+		count, err := cache.IncrementRateLimit(c.Request.Context(), key, window)
 		if err != nil {
 			// Redis down — fail open (allow the request)
 			// Rate limiting is not worth breaking the app for

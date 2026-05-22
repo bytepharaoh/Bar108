@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -83,8 +84,12 @@ func (s *authService) Register(ctx context.Context, input RegisterInput) (AuthRe
 		PasswordHash: string(hash),
 	})
 	if err != nil {
-		// Duplicate email/phone — PostgreSQL unique constraint violation
-		return AuthResult{}, apperror.ErrAlreadyExists
+		// Map only UNIQUE violations to 409, keep other DB failures as 500.
+		var pgErr *pq.Error
+		if errors.As(err, &pgErr) && string(pgErr.Code) == "23505" {
+			return AuthResult{}, apperror.ErrAlreadyExists
+		}
+		return AuthResult{}, fmt.Errorf("Register create user: %w", err)
 	}
 
 	token, err := s.jwtManager.Generate(user.ID, user.Role)
